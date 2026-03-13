@@ -10,8 +10,10 @@ async function videoInfoController(req, res) {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
-      preferFreeFormats: true,
-      youtubeSkipDashManifest: true,
+      addHeader: [
+        "user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "accept-language:en-US,en;q=0.9",
+      ],
     });
 
     // 1️⃣ Best video+audio
