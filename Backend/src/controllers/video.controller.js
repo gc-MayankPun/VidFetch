@@ -2,8 +2,7 @@ import ytdlp from "yt-dlp-exec";
 import { Readable } from "stream";
 
 export async function videoDownloadController(req, res) {
-  const { url } = req.body;
-  console.log(url)
+  const { url } = req.body; 
 
   try {
     const info = await ytdlp(url, {
