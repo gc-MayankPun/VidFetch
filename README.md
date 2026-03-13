@@ -1,6 +1,6 @@
 # VidFetch - YouTube Video Downloader
 
-A modern, full-stack YouTube video downloader application built with React and Express.js. Features a sleek UI with smooth animations and a robust backend for downloading videos from YouTube with multiple format and quality options.
+A modern, full-stack YouTube video downloader application built with React and Express.js. Features a sleek UI with smooth animations and a robust backend for downloading videos from YouTube.
 
 ![VidFetch Demo](https://img.shields.io/badge/React-v19-61dafb?logo=react)
 ![Node.js](https://img.shields.io/badge/Node.js-Express-90c53f?logo=node.js)
