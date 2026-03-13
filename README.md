@@ -421,6 +421,6 @@ This project is licensed under the ISC License - see the LICENSE file for detail
 
 ---
 
-**Made with ❤️ by Mayank | Sheriyans Coding School**
+**Made with ❤️ by gc_mayank (Mayank Pun)**
 
 For more information or questions, please open an issue or contact the project maintainer.
