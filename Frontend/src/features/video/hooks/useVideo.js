@@ -20,7 +20,6 @@ export const useVideo = () => {
 
       toast.success(response.message);
     } catch (err) {
-      
       toast.error(err.message);
     } finally {
       setLoading(false);
@@ -29,7 +28,8 @@ export const useVideo = () => {
 
   async function downloadVideoFormat(format) {
     const downloadUrl =
-      "http://localhost:3000/api/videos/download?url=" +
+      import.meta.env.VITE_API_URL +
+      "/api/videos/download?url=" +
       encodeURIComponent(format.url);
 
     window.location.href = downloadUrl;
