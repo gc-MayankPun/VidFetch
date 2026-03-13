@@ -1,17 +1,17 @@
 import express from "express";
-import cors from "cors";
+import path from "path";
 
 const app = express();
 app.use(express.json());
-app.use(
-  cors({
-    origin: "http://localhost:5173",
-    credentials: true,
-  }),
-);
+app.use(express.static("./public"));
 
+// @Routes
 import videoRouter from "./routes/video.routes.js";
 
 app.use("/api/videos", videoRouter);
+
+app.use("*name", (req, res) => { 
+  res.sendFile(path.join(__dirname, "..", "/public/index.html"));
+});
 
 export default app;
