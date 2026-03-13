@@ -10,7 +10,8 @@ async function videoInfoController(req, res) {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
-      cookies: '/path/to/cookies.txt'
+      preferFreeFormats: true,
+      youtubeSkipDashManifest: true,
     });
 
     // 1️⃣ Best video+audio
