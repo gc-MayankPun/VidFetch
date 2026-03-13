@@ -4,14 +4,14 @@ import Video from "../../video/components/Video";
 import "../styles/home.scss";
 
 const Home = () => {
-  const { loading, video, downloadVideo, downloadVideoFormat, clearVideo } =
+  const { loading, video, fetchInfo, downloadVideo, clearVideo } =
     useVideo();
   const [link, setLink] = useState("");
 
   const handleSearch = () => {
     clearVideo();
     if (link.trim()) {
-      downloadVideo({ videoUrl: link });
+      fetchInfo({ videoUrl: link });
     }
   };
 
@@ -56,7 +56,7 @@ const Home = () => {
 
       {video && (
         <div className="videoContainer">
-          <Video video={video} downloadVideoFormat={downloadVideoFormat} />
+          <Video video={video} downloadVideo={downloadVideo} />
         </div>
       )}
     </main>

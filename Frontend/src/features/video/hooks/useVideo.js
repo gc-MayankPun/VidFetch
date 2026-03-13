@@ -8,10 +8,12 @@ export const useVideo = () => {
   const context = useContext(VideoContext);
   const { video, setVideo, loading, setLoading } = context;
 
-  async function downloadVideo({ videoUrl }) {
+  // Fetch video info from backend
+  async function fetchInfo({ videoUrl }) {
     setLoading(true);
     try {
       const response = await download({ videoUrl });
+      console.log(response);
 
       setVideo({
         ...response.video,
@@ -26,18 +28,16 @@ export const useVideo = () => {
     }
   }
 
-  async function downloadVideoFormat(format) {
-    const downloadUrl =
-      import.meta.env.VITE_API_URL +
-      "/api/videos/download?url=" +
-      encodeURIComponent(format.url);
+  const downloadVideo = (format) => {
+    if (!video?.url) return;
 
+    const downloadUrl = `${import.meta.env.VITE_API_URL}/api/videos/download?url=${encodeURIComponent(video.url)}&itag=${format.itag}`;
     window.location.href = downloadUrl;
-  }
+  };
 
   const clearVideo = () => {
     setVideo(null);
   };
 
-  return { loading, video, downloadVideo, downloadVideoFormat, clearVideo };
+  return { loading, video, fetchInfo, downloadVideo, clearVideo };
 };
