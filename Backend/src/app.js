@@ -1,10 +1,19 @@
 import express from "express";
-import path from "path"; 
+import dotenv from "dotenv"
+import path from "path";
+import cors from "cors";
+dotenv.config();
 
 const app = express();
 
 app.use(express.json());
-app.use(express.static("./public")); 
+app.use(express.static("./public"));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+  }),
+);
 
 // @Routes
 import videoRouter from "./routes/video.routes.js";
