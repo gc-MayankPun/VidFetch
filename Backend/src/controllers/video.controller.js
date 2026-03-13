@@ -10,10 +10,6 @@ async function videoInfoController(req, res) {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
-      addHeader: [
-        "user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "accept-language:en-US,en;q=0.9",
-      ],
     });
 
     // 1️⃣ Best video+audio
@@ -69,9 +65,7 @@ async function videoInfoController(req, res) {
     });
   } catch (err) {
     console.error("Video fetch error:", err);
-    res
-      .status(500)
-      .json({ message: "Failed to fetch video", error: err.message });
+    res.status(500).json({ message: "Failed to fetch video" });
   }
 }
 
