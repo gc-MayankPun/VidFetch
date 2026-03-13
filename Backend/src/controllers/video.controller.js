@@ -10,24 +10,8 @@ async function videoInfoController(req, res) {
       dumpSingleJson: true,
       noWarnings: true,
       noCheckCertificates: true,
+      cookies: '/path/to/cookies.txt'
     });
-
-    // // Only include **video+audio combined streams**
-    // const videoAudioFormats = info.formats.filter(
-    //   (f) =>
-    //     f.vcodec &&
-    //     f.vcodec !== "none" && // has video
-    //     f.acodec &&
-    //     f.acodec !== "none", // has audio
-    // );
-
-    // // Map to friendly frontend data
-    // const formats = videoAudioFormats.map((f) => ({
-    //   itag: f.format_id,
-    //   quality: f.format_note || f.resolution || f.ext,
-    //   ext: f.ext,
-    //   container: f.container,
-    // }));
 
     // 1️⃣ Best video+audio
     const videoAudioFormats = info.formats
