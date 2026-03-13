@@ -3,6 +3,7 @@ import { Readable } from "stream";
 
 export async function videoDownloadController(req, res) {
   const { url } = req.body;
+  console.log(url)
 
   try {
     const info = await ytdlp(url, {
