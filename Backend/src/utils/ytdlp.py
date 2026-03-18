@@ -184,7 +184,6 @@ def cmd_download_mp3(url, itag, output_dir, cookies_path=None):
             "-x",
             "--audio-format", "mp3",
             "--audio-quality", "192K",
-            "--overwrites",
             "-o", output_template,
         ],
         cookies_path
@@ -212,7 +211,6 @@ def cmd_download_mp4(url, output_path, cookies_path=None):
         [
             "-f", "bestvideo+bestaudio/best",
             "--merge-output-format", "mp4",
-            "--overwrites",
             "-o", output_path,
         ],
         cookies_path

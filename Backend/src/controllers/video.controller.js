@@ -99,21 +99,38 @@ async function downloadController(req, res) {
   }
 
   // ── MP4 ───────────────────────────────────────────────────────────────────
-  // MP4 (Option 3: resolve direct URL, let browser download)
   if (type === "mp4") {
+    const uid = randomUUID();
+    const tmpBase = path.join(TMP_DIR, uid);
+
     try {
-      const result = await runPython(["resolve", url, itag]);
+      // Download MP4 to temp directory
+      const outputTemplate = path.join(tmpBase, "%(title)s.%(ext)s");
+      const result = await runPython(["mp4", url, outputTemplate]);
       if (!result.ok) throw new Error(result.error);
 
-      return res.json({
-        directUrl: result.directUrl,
-        title: result.title,
-        ext: result.ext,
+      let finalPath = result.path;
+      if (!existsSync(finalPath)) {
+        // Fallback: scan tmp dir for any MP4 file starting with uid
+        const files = readdirSync(tmpBase).filter(f => f.endsWith('.mp4'));
+        if (files.length === 0) throw new Error("MP4 output file not found after download");
+        finalPath = path.join(tmpBase, files[0]);
+      }
+
+      res.setHeader("Content-Disposition", `attachment; filename="${path.basename(finalPath)}"`);
+      res.setHeader("Content-Type", "video/mp4");
+      res.sendFile(path.resolve(finalPath), (err) => {
+        // Clean up after sending
+        try {
+          if (existsSync(finalPath)) unlinkSync(finalPath);
+        } catch (e) {
+          console.error("Cleanup error:", e);
+        }
       });
     } catch (err) {
-      console.error("MP4 resolve error:", err.message);
+      console.error("MP4 download error:", err.message);
       if (!res.headersSent)
-        return res.status(500).json({ message: "Failed to resolve video URL: " + err.message });
+        res.status(500).json({ message: "MP4 download failed: " + err.message });
     }
     return;
   }

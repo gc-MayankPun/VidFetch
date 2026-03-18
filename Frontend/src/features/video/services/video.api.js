@@ -6,8 +6,7 @@ const api = axios.create({
 });
 
 // Fetch video metadata (title, thumbnail, formats)
-export async function fetchVideoInfo({ videoUrl }) {
-  console.log(import.meta.env.VITE_API_URL)
+export async function fetchVideoInfo({ videoUrl }) { 
   try {
     const response = await api.post("/api/videos/info", {
       url: videoUrl,
@@ -23,35 +22,14 @@ export async function downloadFormat({ videoUrl, itag, type }) {
   const params = new URLSearchParams({ url: videoUrl, itag, type });
 
   try {
-    if (type === "mp4") {
-      // MP4: Get direct URL from backend, then download via blob
-      const response = await api.get(`/api/videos/download?${params}`);
-      const { directUrl, title, ext } = response.data;
-
-      // Fetch the direct URL as a blob and download it
-      const videoResponse = await fetch(directUrl);
-      if (!videoResponse.ok) throw new Error("Failed to fetch video");
-      
-      const blob = await videoResponse.blob();
-      
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${title}.${ext}`;
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } else {
-      // MP3: Stream from backend (needs ffmpeg conversion)
-      const a = document.createElement("a");
-      a.href = `${base}/api/videos/download?${params}`;
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
+    // Both MP4 and MP3 stream directly from backend
+    // This avoids CORS issues and lets the server handle everything
+    const a = document.createElement("a");
+    a.href = `${base}/api/videos/download?${params}`;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   } catch (err) {
     throw err.response?.data || { message: "Failed to download file" };
   }
