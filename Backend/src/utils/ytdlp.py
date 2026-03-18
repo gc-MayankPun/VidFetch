@@ -38,7 +38,7 @@ def base_cmd(cookies_path=None, client="web"):
     cmd = [
         YTDLP_BIN,
         "--no-playlist",
-        "--no-warnings",
+        # "--no-warnings",
         "--force-ipv4",
         "--sleep-requests", "2",
         "--socket-timeout", "30",
