@@ -1,150 +1,229 @@
 #!/usr/bin/env python3
-"""
-ytdlp.py — YouTube downloader using pytubefix
-Usage:
-  python3 ytdlp.py info <url> [cookies_path]
-  python3 ytdlp.py mp4 <url> <itag> <output_path>
-  python3 ytdlp.py mp3 <url> <itag> <output_path>
-"""
-
 import sys
 import json
 import os
-from pytubefix import YouTube
-from pytubefix.cli import on_progress
+import shutil
+import subprocess
+import time
+
+# -----------------------------
+# Ensure Node is available
+# -----------------------------
+_node = (
+    shutil.which("node") or
+    "/opt/render/project/nodes/node-22.22.0/bin/node"
+)
+if _node and os.path.exists(_node):
+    _node_dir = os.path.dirname(_node)
+    os.environ["PATH"] = f"{_node_dir}:{os.environ.get('PATH', '')}"
 
 
-def get_yt(url):
-    return YouTube(url, on_progress_callback=on_progress, use_oauth=False, allow_oauth_cache=False)
+# -----------------------------
+# Base Command Builder
+# -----------------------------
+def base_cmd(cookies_path=None, client="android"):
+    for p in [
+        os.path.expanduser("~/.deno/bin"),
+        "/opt/render/project/nodes/node-22.22.0/bin",
+        "/usr/bin",
+        "/usr/local/bin",
+    ]:
+        if os.path.isdir(p) and p not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{p}:{os.environ['PATH']}"
+
+    cmd = [
+        "yt-dlp",
+        "--no-playlist",
+        "--no-warnings",
+        "--force-ipv4",
+        "--sleep-requests", "1",
+        "--extractor-args", f"youtube:player_client={client}",
+        "--format-sort", "res,ext:mp4:m4a",
+        "--user-agent", "com.google.android.youtube/17.31.35 (Linux; U; Android 11)",
+    ]
+
+    if cookies_path and os.path.exists(cookies_path):
+        cmd += ["--cookies", cookies_path]
+
+    return cmd
 
 
+# -----------------------------
+# Run Command with Retry Logic
+# -----------------------------
+def run_cmd_with_retry(url, base_args, cookies_path=None, retries=3):
+    clients = ["android", "web_safari", "android_creator"]
+
+    last_error = None
+
+    for attempt in range(retries):
+        for client in clients:
+            try:
+                cmd = base_cmd(cookies_path, client) + base_args + [url]
+
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    env=os.environ.copy(),
+                )
+
+                if result.returncode == 0:
+                    return result.stdout.strip()
+
+                last_error = result.stderr.strip()
+
+            except Exception as e:
+                last_error = str(e)
+
+        # small delay before retry
+        time.sleep(2)
+
+    raise Exception(last_error or "yt-dlp failed after retries")
+
+
+# -----------------------------
+# INFO COMMAND
+# -----------------------------
 def cmd_info(url, cookies_path=None):
-    yt = get_yt(url)
+    raw = run_cmd_with_retry(url, ["--dump-json"], cookies_path)
+    info = json.loads(raw)
 
-    streams = yt.streams
-    formats = []
+    formats = info.get("formats", [])
 
-    # Best MP4 progressive (video+audio combined)
-    progressive = streams.filter(progressive=True, file_extension="mp4").order_by("resolution").last()
-    # Best video only + audio for DASH
-    video_dash = streams.filter(adaptive=True, file_extension="mp4", only_video=True).order_by("resolution").last()
-    audio_dash = streams.filter(adaptive=True, only_audio=True).order_by("abr").last()
+    # Best combined
+    combined = [
+        f for f in formats
+        if f.get("vcodec") != "none" and f.get("acodec") != "none"
+    ]
+    combined.sort(key=lambda f: f.get("height") or 0, reverse=True)
+    best_combined = combined[0] if combined else None
 
-    if video_dash and audio_dash:
-        formats.append({
-            "itag": f"{video_dash.itag}+{audio_dash.itag}",
-            "label": f"{video_dash.resolution} MP4",
+    # Best video-only
+    video_only = [
+        f for f in formats
+        if f.get("vcodec") != "none"
+        and (f.get("acodec") == "none")
+    ]
+    video_only.sort(key=lambda f: f.get("height") or 0, reverse=True)
+    best_video = video_only[0] if video_only else None
+
+    # Best audio-only
+    audio_only = [
+        f for f in formats
+        if f.get("vcodec") == "none"
+        and f.get("acodec") != "none"
+    ]
+    audio_only.sort(key=lambda f: f.get("abr") or 0, reverse=True)
+    best_audio = audio_only[0] if audio_only else None
+
+    result_formats = []
+
+    if best_video and best_audio:
+        result_formats.append({
+            "itag": f"{best_video['format_id']}+{best_audio['format_id']}",
+            "label": f"{best_video.get('height', '?')}p MP4",
             "ext": "mp4",
             "type": "mp4",
         })
-    elif progressive:
-        formats.append({
-            "itag": str(progressive.itag),
-            "label": f"{progressive.resolution} MP4",
+    elif best_combined:
+        result_formats.append({
+            "itag": best_combined["format_id"],
+            "label": best_combined.get("format_note") or "MP4",
             "ext": "mp4",
             "type": "mp4",
         })
 
-    # MP3 — use best audio stream
-    audio = streams.filter(only_audio=True).order_by("abr").last()
-    if audio:
-        formats.append({
-            "itag": str(audio.itag),
+    mp3_itag = (best_audio or best_combined or {}).get("format_id")
+    if mp3_itag:
+        result_formats.append({
+            "itag": mp3_itag,
             "label": "MP3 Audio",
             "ext": "mp3",
             "type": "mp3",
         })
 
-    # Thumbnail
-    thumbnail = yt.thumbnail_url
+    thumbnails = sorted(
+        [t for t in (info.get("thumbnails") or []) if t.get("url")],
+        key=lambda t: (t.get("width") or 0) * (t.get("height") or 0),
+        reverse=True,
+    )
+    best_thumb = thumbnails[0]["url"] if thumbnails else info.get("thumbnail", "")
 
     print(json.dumps({
         "ok": True,
-        "title": yt.title,
-        "thumbnail": thumbnail,
-        "duration": yt.length,
-        "formats": formats,
+        "title": info.get("title", ""),
+        "thumbnail": best_thumb,
+        "duration": info.get("duration", 0),
+        "formats": result_formats,
         "url": url,
     }))
 
 
-def cmd_download_mp4(url, itag, output_path):
-    yt = get_yt(url)
-    tmp_dir = os.path.dirname(output_path)
-    uid = os.path.basename(output_path).replace(".mp4", "")
+# -----------------------------
+# DOWNLOAD MP4
+# -----------------------------
+def cmd_download_mp4(url, output_path, cookies_path=None):
+    run_cmd_with_retry(
+        url,
+        [
+            "-f", "bestvideo+bestaudio/best",
+            "--merge-output-format", "mp4",
+            "--overwrites",
+            "-o", output_path,
+        ],
+        cookies_path
+    )
 
-    if "+" in itag:
-        # DASH — download video and audio separately then merge with ffmpeg
-        video_itag, audio_itag = itag.split("+")
-        video_stream = yt.streams.get_by_itag(int(video_itag))
-        audio_stream = yt.streams.get_by_itag(int(audio_itag))
-
-        video_file = video_stream.download(output_path=tmp_dir, filename=f"{uid}_video.mp4")
-        audio_file = audio_stream.download(output_path=tmp_dir, filename=f"{uid}_audio.mp4")
-
-        # Merge with ffmpeg
-        merged = os.path.join(tmp_dir, f"{uid}.mp4")
-        os.system(f'ffmpeg -i "{video_file}" -i "{audio_file}" -c copy "{merged}" -y -loglevel quiet')
-
-        # Cleanup intermediates
-        try:
-            os.remove(video_file)
-            os.remove(audio_file)
-        except:
-            pass
-
-        print(json.dumps({"ok": True, "path": merged}))
-    else:
-        # Progressive — single stream with video+audio
-        stream = yt.streams.get_by_itag(int(itag))
-        out = stream.download(output_path=tmp_dir, filename=f"{uid}.mp4")
-        print(json.dumps({"ok": True, "path": out}))
+    print(json.dumps({"ok": True, "path": output_path}))
 
 
-def cmd_download_mp3(url, itag, output_path):
-    yt = get_yt(url)
-    tmp_dir = os.path.dirname(output_path)
-    uid = os.path.basename(output_path)
+# -----------------------------
+# DOWNLOAD MP3
+# -----------------------------
+def cmd_download_mp3(url, output_path, cookies_path=None):
+    run_cmd_with_retry(
+        url,
+        [
+            "-f", "bestaudio",
+            "-x",
+            "--audio-format", "mp3",
+            "--audio-quality", "192K",
+            "--overwrites",
+            "-o", output_path,
+        ],
+        cookies_path
+    )
 
-    stream = yt.streams.get_by_itag(int(itag))
-    # Download as original format first
-    raw_file = stream.download(output_path=tmp_dir, filename=f"{uid}_raw")
-
-    # Convert to mp3 with ffmpeg
-    mp3_file = os.path.join(tmp_dir, f"{uid}.mp3")
-    os.system(f'ffmpeg -i "{raw_file}" -vn -ab 192k -ar 44100 -f mp3 "{mp3_file}" -y -loglevel quiet')
-
-    try:
-        os.remove(raw_file)
-    except:
-        pass
-
-    print(json.dumps({"ok": True, "path": mp3_file}))
+    print(json.dumps({"ok": True, "path": output_path}))
 
 
+# -----------------------------
+# MAIN
+# -----------------------------
 if __name__ == "__main__":
     try:
         action = sys.argv[1]
 
         if action == "info":
-            url = sys.argv[2]
-            cookies = sys.argv[3] if len(sys.argv) > 3 else None
-            cmd_info(url, cookies)
+            cmd_info(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)
 
         elif action == "mp4":
-            url = sys.argv[2]
-            itag = sys.argv[3]
-            output = sys.argv[4]
-            cmd_download_mp4(url, itag, output)
+            cmd_download_mp4(
+                sys.argv[2],
+                sys.argv[3],
+                sys.argv[4] if len(sys.argv) > 4 else None
+            )
 
         elif action == "mp3":
-            url = sys.argv[2]
-            itag = sys.argv[3]
-            output = sys.argv[4]
-            cmd_download_mp3(url, itag, output)
+            cmd_download_mp3(
+                sys.argv[2],
+                sys.argv[3],
+                sys.argv[4] if len(sys.argv) > 4 else None
+            )
 
         else:
-            print(json.dumps({"ok": False, "error": f"Unknown action: {action}"}))
+            print(json.dumps({"ok": False, "error": "Invalid action"}))
             sys.exit(1)
 
     except Exception as e:
