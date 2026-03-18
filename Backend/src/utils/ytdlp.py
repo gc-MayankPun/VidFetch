@@ -21,7 +21,7 @@ if _node and os.path.exists(_node):
 # -----------------------------
 # Base Command Builder
 # -----------------------------
-def base_cmd(cookies_path=None, client="android"):
+def base_cmd(cookies_path=None, client="web"):
     for p in [
         os.path.expanduser("~/.deno/bin"),
         "/opt/render/project/nodes/node-22.22.0/bin",
@@ -36,10 +36,11 @@ def base_cmd(cookies_path=None, client="android"):
         "--no-playlist",
         "--no-warnings",
         "--force-ipv4",
-        "--sleep-requests", "1",
+        "--sleep-requests", "2",
+        "--socket-timeout", "30",
+        "--http-chunk-size", "1048576",
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "--extractor-args", f"youtube:player_client={client}",
-        "--format-sort", "res,ext:mp4:m4a",
-        "--user-agent", "com.google.android.youtube/17.31.35 (Linux; U; Android 11)",
     ]
 
     if cookies_path and os.path.exists(cookies_path):
@@ -52,7 +53,7 @@ def base_cmd(cookies_path=None, client="android"):
 # Run Command with Retry Logic
 # -----------------------------
 def run_cmd_with_retry(url, base_args, cookies_path=None, retries=3):
-    clients = ["android", "web_safari", "android_creator"]
+    clients = ["web", "web_safari", "android", "android_creator"]
 
     last_error = None
 
@@ -66,6 +67,7 @@ def run_cmd_with_retry(url, base_args, cookies_path=None, retries=3):
                     capture_output=True,
                     text=True,
                     env=os.environ.copy(),
+                    timeout=300,
                 )
 
                 if result.returncode == 0:
@@ -73,11 +75,15 @@ def run_cmd_with_retry(url, base_args, cookies_path=None, retries=3):
 
                 last_error = result.stderr.strip()
 
+            except subprocess.TimeoutExpired:
+                last_error = "Command timed out after 5 minutes"
             except Exception as e:
                 last_error = str(e)
 
-        # small delay before retry
-        time.sleep(2)
+        if attempt < retries - 1:
+            wait_time = 5 * (attempt + 1)
+            print(f"Retrying in {wait_time}s...", file=sys.stderr)
+            time.sleep(wait_time)
 
     raise Exception(last_error or "yt-dlp failed after retries")
 
@@ -91,7 +97,7 @@ def cmd_info(url, cookies_path=None):
 
     formats = info.get("formats", [])
 
-    # Best combined
+    # Best combined (video + audio together)
     combined = [
         f for f in formats
         if f.get("vcodec") != "none" and f.get("acodec") != "none"
@@ -119,6 +125,7 @@ def cmd_info(url, cookies_path=None):
 
     result_formats = []
 
+    # MP4: Use best video + audio
     if best_video and best_audio:
         result_formats.append({
             "itag": f"{best_video['format_id']}+{best_audio['format_id']}",
@@ -134,7 +141,16 @@ def cmd_info(url, cookies_path=None):
             "type": "mp4",
         })
 
-    mp3_itag = (best_audio or best_combined or {}).get("format_id")
+    # MP3: Prefer audio-only, fall back to best available
+    mp3_itag = None
+
+    if best_audio:
+        mp3_itag = best_audio["format_id"]
+    elif best_combined:
+        mp3_itag = best_combined["format_id"]
+    elif best_video:
+        mp3_itag = best_video["format_id"]
+
     if mp3_itag:
         result_formats.append({
             "itag": mp3_itag,
@@ -164,35 +180,41 @@ def cmd_info(url, cookies_path=None):
 # DOWNLOAD MP3
 # ─────────────────────────────────
 def cmd_download_mp3(url, itag, output_path, cookies_path=None):
-    """
-    Downloads audio and converts to MP3.
-    Args:
-        url: YouTube URL
-        itag: Format ID to download
-        output_path: Full path for output file (e.g. /tmp/abc123.mp3)
-        cookies_path: Optional path to cookies file
-    """
-    # Ensure output directory exists
     output_dir = os.path.dirname(output_path)
     os.makedirs(output_dir, exist_ok=True)
-    
-    # Use the exact output path provided
+
+    output_template = output_path.rsplit('.mp3', 1)[0] if output_path.endswith('.mp3') else output_path
+
     run_cmd_with_retry(
         url,
         [
-            "-f", itag,
             "-x",
             "--audio-format", "mp3",
             "--audio-quality", "192K",
-            "-o", output_path,
+            "--format-sort", "asr,abr",
+            "--no-format-sort-force",
+            "-f", "bestaudio/best",
+            "-o", output_template,
         ],
         cookies_path
     )
-    
-    # Verify the file was created
+
     if not os.path.exists(output_path):
-        raise Exception(f"MP3 conversion failed - output file not created at {output_path}")
-    
+        raise Exception(f"MP3 conversion failed - file not found at {output_path}")
+
+    file_size = os.path.getsize(output_path)
+    if file_size < 100000:
+        raise Exception(f"MP3 file too small ({file_size} bytes) - conversion may have failed")
+
+    try:
+        with open(output_path, 'rb') as f:
+            header = f.read(3)
+            is_mp3 = header.startswith(b'\xff') or header.startswith(b'ID3')
+            if not is_mp3:
+                raise Exception(f"File isn't valid MP3 - header: {header.hex()}")
+    except Exception as e:
+        raise Exception(f"MP3 validation failed: {str(e)}")
+
     print(json.dumps({"ok": True, "path": output_path}))
 
 
@@ -200,28 +222,20 @@ def cmd_download_mp3(url, itag, output_path, cookies_path=None):
 # DOWNLOAD MP4
 # ─────────────────────────────────
 def cmd_download_mp4(url, output_path, cookies_path=None):
-    """
-    Downloads video as MP4.
-    Args:
-        url: YouTube URL
-        output_path: Full path for output file (e.g. /tmp/abc123.mp4)
-        cookies_path: Optional path to cookies file
-    """
-    # Ensure output directory exists
     output_dir = os.path.dirname(output_path)
     os.makedirs(output_dir, exist_ok=True)
-    
+
     run_cmd_with_retry(
         url,
         [
             "-f", "bestvideo+bestaudio/best",
+            "--format-sort", "res,ext:mp4:m4a",
             "--merge-output-format", "mp4",
             "-o", output_path,
         ],
         cookies_path
     )
-    
-    # Verify the file was created
+
     if not os.path.exists(output_path):
         raise Exception(f"MP4 download failed - output file not created at {output_path}")
 
@@ -239,7 +253,6 @@ def cmd_resolve(url, itag, cookies_path=None):
 
     info = json.loads(raw)
 
-    # Find the matching format and extract its direct URL
     formats = info.get("formats", [])
     target = None
 
@@ -249,9 +262,6 @@ def cmd_resolve(url, itag, cookies_path=None):
             target = f
             break
 
-    # For combined formats like "123+456", yt-dlp merges them.
-    # In resolve mode we return the best available direct URL.
-    # If no exact match, use the url from the top-level info (best merged).
     direct_url = (target or {}).get("url") or info.get("url")
     ext = (target or {}).get("ext", "mp4")
     title = info.get("title", "video")
@@ -267,6 +277,7 @@ def cmd_resolve(url, itag, cookies_path=None):
         "title": title,
     }))
 
+
 # ─────────────────────────────────
 # MAIN
 # ─────────────────────────────────
@@ -278,27 +289,25 @@ if __name__ == "__main__":
             cmd_info(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)
 
         elif action == "mp4":
-            # sys.argv: ["script.py", "mp4", url, output_path, [cookies]]
             cmd_download_mp4(
-                sys.argv[2],   # url
-                sys.argv[3],   # output_path (full path with filename)
-                sys.argv[4] if len(sys.argv) > 4 else None   # cookies
+                sys.argv[2],
+                sys.argv[3],
+                sys.argv[4] if len(sys.argv) > 4 else None
             )
 
         elif action == "mp3":
-            # sys.argv: ["script.py", "mp3", url, itag, output_path, [cookies]]
             cmd_download_mp3(
-                sys.argv[2],   # url
-                sys.argv[3],   # itag
-                sys.argv[4],   # output_path (full path with filename)
-                sys.argv[5] if len(sys.argv) > 5 else None   # cookies
+                sys.argv[2],
+                sys.argv[3],
+                sys.argv[4],
+                sys.argv[5] if len(sys.argv) > 5 else None
             )
 
         elif action == "resolve":
             cmd_resolve(
-                sys.argv[2],   # url
-                sys.argv[3],   # itag
-                sys.argv[4] if len(sys.argv) > 4 else None   # cookies
+                sys.argv[2],
+                sys.argv[3],
+                sys.argv[4] if len(sys.argv) > 4 else None
             )
 
         else:
