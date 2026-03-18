@@ -29,25 +29,19 @@ class StderrLogger:
         print(msg, file=sys.stderr)
 
 
- 
+import os
+import shutil
 
+# Set PATH at module level — before any yt-dlp calls
+_node_path = (
+    shutil.which("node") or
+    "/opt/render/project/nodes/node-22.22.0/bin/node"
+)
+if _node_path and os.path.exists(_node_path):
+    _node_dir = os.path.dirname(_node_path)
+    os.environ["PATH"] = f"{_node_dir}:{os.environ.get('PATH', '')}"
 
 def get_opts(cookies_path=None):
-    # Force PATH to include node
-    node_path = (
-        shutil.which("node") or
-        shutil.which("nodejs") or
-        "/usr/bin/node" or
-        "/usr/local/bin/node"
-    )
-    
-    if node_path:
-        node_dir = os.path.dirname(node_path)
-        os.environ["PATH"] = f"{node_dir}:{os.environ.get('PATH', '')}"
-        print(f"[debug] using node: {node_path}", file=sys.stderr)
-    else:
-        print("[debug] node not found in PATH", file=sys.stderr)
-
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -59,12 +53,10 @@ def get_opts(cookies_path=None):
             }
         },
     }
-
     if cookies_path and os.path.exists(cookies_path):
         opts["cookiefile"] = cookies_path
-
     return opts
-
+ 
 
 def cmd_info(url, cookies_path=None):
     opts = get_opts(cookies_path)
