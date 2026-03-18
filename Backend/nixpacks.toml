@@ -1,6 +1,9 @@
 [phases.setup]
 nixPkgs = ["yt-dlp", "python3", "nodejs_22", "ffmpeg"]
 
+[phases.build]
+cmds = ["pip install -U yt-dlp --break-system-packages"]
+
 [phases.install]
 cmds = ["npm install"]
 
