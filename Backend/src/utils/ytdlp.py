@@ -160,23 +160,23 @@ def cmd_info(url, cookies_path=None):
     }))
 
 
-# -----------------------------
+# ─────────────────────────────────
 # DOWNLOAD MP3
-# -----------------------------
-def cmd_download_mp3(url, itag, output_dir, cookies_path=None):
+# ─────────────────────────────────
+def cmd_download_mp3(url, itag, output_path, cookies_path=None):
     """
     Downloads audio and converts to MP3.
     Args:
         url: YouTube URL
         itag: Format ID to download
-        output_dir: Directory to save the file (without filename)
+        output_path: Full path for output file (e.g. /tmp/abc123.mp3)
         cookies_path: Optional path to cookies file
     """
-    # Create output dir if it doesn't exist
+    # Ensure output directory exists
+    output_dir = os.path.dirname(output_path)
     os.makedirs(output_dir, exist_ok=True)
     
-    output_template = os.path.join(output_dir, "%(title)s.%(ext)s")
-    
+    # Use the exact output path provided
     run_cmd_with_retry(
         url,
         [
@@ -184,20 +184,14 @@ def cmd_download_mp3(url, itag, output_dir, cookies_path=None):
             "-x",
             "--audio-format", "mp3",
             "--audio-quality", "192K",
-            "-o", output_template,
+            "-o", output_path,
         ],
         cookies_path
     )
-
-    # Find the output file
-    files = os.listdir(output_dir)
-    mp3_files = [f for f in files if f.endswith('.mp3')]
     
-    if not mp3_files:
-        raise Exception("MP3 conversion failed - no output file found")
-    
-    # Return the full path of the MP3 file
-    output_path = os.path.join(output_dir, mp3_files[0])
+    # Verify the file was created
+    if not os.path.exists(output_path):
+        raise Exception(f"MP3 conversion failed - output file not created at {output_path}")
     
     print(json.dumps({"ok": True, "path": output_path}))
 
@@ -206,6 +200,17 @@ def cmd_download_mp3(url, itag, output_dir, cookies_path=None):
 # DOWNLOAD MP4
 # ─────────────────────────────────
 def cmd_download_mp4(url, output_path, cookies_path=None):
+    """
+    Downloads video as MP4.
+    Args:
+        url: YouTube URL
+        output_path: Full path for output file (e.g. /tmp/abc123.mp4)
+        cookies_path: Optional path to cookies file
+    """
+    # Ensure output directory exists
+    output_dir = os.path.dirname(output_path)
+    os.makedirs(output_dir, exist_ok=True)
+    
     run_cmd_with_retry(
         url,
         [
@@ -215,6 +220,10 @@ def cmd_download_mp4(url, output_path, cookies_path=None):
         ],
         cookies_path
     )
+    
+    # Verify the file was created
+    if not os.path.exists(output_path):
+        raise Exception(f"MP4 download failed - output file not created at {output_path}")
 
     print(json.dumps({"ok": True, "path": output_path}))
 
@@ -269,18 +278,19 @@ if __name__ == "__main__":
             cmd_info(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)
 
         elif action == "mp4":
+            # sys.argv: ["script.py", "mp4", url, output_path, [cookies]]
             cmd_download_mp4(
-                sys.argv[2],
-                sys.argv[3],
-                sys.argv[4] if len(sys.argv) > 4 else None
+                sys.argv[2],   # url
+                sys.argv[3],   # output_path (full path with filename)
+                sys.argv[4] if len(sys.argv) > 4 else None   # cookies
             )
 
         elif action == "mp3":
-            # sys.argv: ["script.py", "mp3", url, itag, output_dir, [cookies]]
+            # sys.argv: ["script.py", "mp3", url, itag, output_path, [cookies]]
             cmd_download_mp3(
                 sys.argv[2],   # url
                 sys.argv[3],   # itag
-                sys.argv[4],   # output_dir
+                sys.argv[4],   # output_path (full path with filename)
                 sys.argv[5] if len(sys.argv) > 5 else None   # cookies
             )
 

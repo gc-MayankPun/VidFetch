@@ -64,23 +64,19 @@ async function downloadController(req, res) {
   // ── MP3 ───────────────────────────────────────────────────────────────────
   if (type === "mp3") {
     const uid = randomUUID();
-    const tmpBase = path.join(TMP_DIR, uid);
+    const outputPath = path.join(TMP_DIR, `${uid}.mp3`);
 
     try {
-      // Arguments: url, itag, output_dir (not output filename)
-      const result = await runPython(["mp3", url, itag, tmpBase]);
+      // Arguments: url, itag, output_path (full path with filename)
+      const result = await runPython(["mp3", url, itag, outputPath]);
       if (!result.ok) throw new Error(result.error);
 
-      // Use path returned by Python
-      let finalPath = result.path;
+      const finalPath = result.path;
       if (!existsSync(finalPath)) {
-        // Fallback: scan tmp dir for any MP3 file starting with uid
-        const files = readdirSync(tmpBase).filter(f => f.endsWith('.mp3'));
-        if (files.length === 0) throw new Error("MP3 output file not found after conversion");
-        finalPath = path.join(tmpBase, files[0]);
+        throw new Error("MP3 output file not found after conversion");
       }
 
-      res.setHeader("Content-Disposition", `attachment; filename="${path.basename(finalPath)}"`);
+      res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
       res.setHeader("Content-Type", "audio/mpeg");
       res.sendFile(path.resolve(finalPath), (err) => {
         // Clean up after sending
@@ -101,23 +97,19 @@ async function downloadController(req, res) {
   // ── MP4 ───────────────────────────────────────────────────────────────────
   if (type === "mp4") {
     const uid = randomUUID();
-    const tmpBase = path.join(TMP_DIR, uid);
+    const outputPath = path.join(TMP_DIR, `${uid}.mp4`);
 
     try {
-      // Download MP4 to temp directory
-      const outputTemplate = path.join(tmpBase, "%(title)s.%(ext)s");
-      const result = await runPython(["mp4", url, outputTemplate]);
+      // Download MP4 to temp file
+      const result = await runPython(["mp4", url, outputPath]);
       if (!result.ok) throw new Error(result.error);
 
-      let finalPath = result.path;
+      const finalPath = result.path;
       if (!existsSync(finalPath)) {
-        // Fallback: scan tmp dir for any MP4 file starting with uid
-        const files = readdirSync(tmpBase).filter(f => f.endsWith('.mp4'));
-        if (files.length === 0) throw new Error("MP4 output file not found after download");
-        finalPath = path.join(tmpBase, files[0]);
+        throw new Error("MP4 output file not found after download");
       }
 
-      res.setHeader("Content-Disposition", `attachment; filename="${path.basename(finalPath)}"`);
+      res.setHeader("Content-Disposition", `attachment; filename="video.mp4"`);
       res.setHeader("Content-Type", "video/mp4");
       res.sendFile(path.resolve(finalPath), (err) => {
         // Clean up after sending

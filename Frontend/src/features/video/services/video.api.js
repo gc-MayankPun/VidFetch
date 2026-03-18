@@ -6,7 +6,8 @@ const api = axios.create({
 });
 
 // Fetch video metadata (title, thumbnail, formats)
-export async function fetchVideoInfo({ videoUrl }) { 
+export async function fetchVideoInfo({ videoUrl }) {
+  console.log(import.meta.env.VITE_API_URL)
   try {
     const response = await api.post("/api/videos/info", {
       url: videoUrl,
