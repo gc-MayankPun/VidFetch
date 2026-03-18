@@ -1,73 +1,109 @@
 #!/usr/bin/env python3
-"""
-ytdlp.py — yt-dlp Python library wrapper
-Called from Node.js controller via spawn('python3', ['ytdlp.py', action, ...args])
-
-Usage:
-  python3 ytdlp.py info <url> [cookies_path]
-  python3 ytdlp.py download <url> <itag> <output_path> [cookies_path]
-  python3 ytdlp.py mp3 <url> <itag> <output_path> [cookies_path]
-"""
-
 import sys
 import json
 import os
-import yt_dlp
-import logging
+import shutil
+import subprocess
+import time
 
-# Redirect yt-dlp internal logs to stderr so they don't corrupt our JSON stdout
-class StderrLogger:
-    def debug(self, msg):
-        print(msg, file=sys.stderr)
-    def info(self, msg):
-        print(msg, file=sys.stderr)
-    def warning(self, msg):
-        print(msg, file=sys.stderr)
-    def error(self, msg):
-        print(msg, file=sys.stderr)
+# -----------------------------
+# Ensure Node is available
+# -----------------------------
+_node = (
+    shutil.which("node") or
+    "/opt/render/project/nodes/node-22.22.0/bin/node"
+)
+if _node and os.path.exists(_node):
+    _node_dir = os.path.dirname(_node)
+    os.environ["PATH"] = f"{_node_dir}:{os.environ.get('PATH', '')}"
 
 
-def get_opts(cookies_path=None):
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "noprogress": True,
-        "logger": StderrLogger(),   # ← all yt-dlp output goes to stderr
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["tv_embedded", "web"],
-            }
-        },
-    }
+# -----------------------------
+# Base Command Builder
+# -----------------------------
+def base_cmd(cookies_path=None, client="android"):
+    for p in [
+        os.path.expanduser("~/.deno/bin"),
+        "/opt/render/project/nodes/node-22.22.0/bin",
+        "/usr/bin",
+        "/usr/local/bin",
+    ]:
+        if os.path.isdir(p) and p not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{p}:{os.environ['PATH']}"
+
+    cmd = [
+        "yt-dlp",
+        "--no-playlist",
+        "--no-warnings",
+        "--force-ipv4",
+        "--sleep-requests", "1",
+        "--extractor-args", f"youtube:player_client={client}",
+        "--format-sort", "res,ext:mp4:m4a",
+        "--user-agent", "com.google.android.youtube/17.31.35 (Linux; U; Android 11)",
+    ]
+
     if cookies_path and os.path.exists(cookies_path):
-        opts["cookiefile"] = cookies_path
-    return opts
+        cmd += ["--cookies", cookies_path]
+
+    return cmd
 
 
+# -----------------------------
+# Run Command with Retry Logic
+# -----------------------------
+def run_cmd_with_retry(url, base_args, cookies_path=None, retries=3):
+    clients = ["android", "web_safari", "android_creator"]
+
+    last_error = None
+
+    for attempt in range(retries):
+        for client in clients:
+            try:
+                cmd = base_cmd(cookies_path, client) + base_args + [url]
+
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    env=os.environ.copy(),
+                )
+
+                if result.returncode == 0:
+                    return result.stdout.strip()
+
+                last_error = result.stderr.strip()
+
+            except Exception as e:
+                last_error = str(e)
+
+        # small delay before retry
+        time.sleep(2)
+
+    raise Exception(last_error or "yt-dlp failed after retries")
+
+
+# -----------------------------
+# INFO COMMAND
+# -----------------------------
 def cmd_info(url, cookies_path=None):
-    opts = get_opts(cookies_path)
-    opts["skip_download"] = True
-
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
+    raw = run_cmd_with_retry(url, ["--dump-json"], cookies_path)
+    info = json.loads(raw)
 
     formats = info.get("formats", [])
 
-    # Best combined (video+audio)
+    # Best combined
     combined = [
         f for f in formats
-        if f.get("vcodec") and f["vcodec"] != "none"
-        and f.get("acodec") and f["acodec"] != "none"
+        if f.get("vcodec") != "none" and f.get("acodec") != "none"
     ]
     combined.sort(key=lambda f: f.get("height") or 0, reverse=True)
     best_combined = combined[0] if combined else None
 
-    # Best video-only (DASH)
+    # Best video-only
     video_only = [
         f for f in formats
-        if f.get("vcodec") and f["vcodec"] != "none"
-        and (not f.get("acodec") or f["acodec"] == "none")
-        and f.get("ext") in ("mp4", "webm")
+        if f.get("vcodec") != "none"
+        and (f.get("acodec") == "none")
     ]
     video_only.sort(key=lambda f: f.get("height") or 0, reverse=True)
     best_video = video_only[0] if video_only else None
@@ -75,15 +111,14 @@ def cmd_info(url, cookies_path=None):
     # Best audio-only
     audio_only = [
         f for f in formats
-        if (not f.get("vcodec") or f["vcodec"] == "none")
-        and f.get("acodec") and f["acodec"] != "none"
+        if f.get("vcodec") == "none"
+        and f.get("acodec") != "none"
     ]
     audio_only.sort(key=lambda f: f.get("abr") or 0, reverse=True)
     best_audio = audio_only[0] if audio_only else None
 
     result_formats = []
 
-    # MP4
     if best_video and best_audio:
         result_formats.append({
             "itag": f"{best_video['format_id']}+{best_audio['format_id']}",
@@ -94,12 +129,11 @@ def cmd_info(url, cookies_path=None):
     elif best_combined:
         result_formats.append({
             "itag": best_combined["format_id"],
-            "label": best_combined.get("format_note") or f"{best_combined.get('height', '')}p",
+            "label": best_combined.get("format_note") or "MP4",
             "ext": "mp4",
             "type": "mp4",
         })
 
-    # MP3
     mp3_itag = (best_audio or best_combined or {}).get("format_id")
     if mp3_itag:
         result_formats.append({
@@ -109,14 +143,12 @@ def cmd_info(url, cookies_path=None):
             "type": "mp3",
         })
 
-    # Best thumbnail
-    thumbnails = info.get("thumbnails") or []
-    thumbnails_sorted = sorted(
-        [t for t in thumbnails if t.get("url")],
+    thumbnails = sorted(
+        [t for t in (info.get("thumbnails") or []) if t.get("url")],
         key=lambda t: (t.get("width") or 0) * (t.get("height") or 0),
         reverse=True,
     )
-    best_thumb = thumbnails_sorted[0]["url"] if thumbnails_sorted else info.get("thumbnail", "")
+    best_thumb = thumbnails[0]["url"] if thumbnails else info.get("thumbnail", "")
 
     print(json.dumps({
         "ok": True,
@@ -128,89 +160,117 @@ def cmd_info(url, cookies_path=None):
     }))
 
 
-def cmd_download_mp4(url, itag, output_path, cookies_path=None):
-    # print(f"[mp4] url={url} itag={itag} output={output_path}", file=sys.stderr)
-    opts = get_opts(cookies_path)
-    opts.update({
-        "format": itag,
-        "outtmpl": {"default": output_path},  # ← dict form forces exact path
-        "merge_output_format": "mp4",
-        "no_playlist": True,
-        "overwrites": True,
-    })
+# -----------------------------
+# DOWNLOAD MP4
+# -----------------------------
+def cmd_download_mp4(url, output_path, cookies_path=None):
+    run_cmd_with_retry(
+        url,
+        [
+            "-f", "bestvideo+bestaudio/best",
+            "--merge-output-format", "mp4",
+            "--overwrites",
+            "-o", output_path,
+        ],
+        cookies_path
+    )
 
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        ydl.download([url])
+    print(json.dumps({"ok": True, "path": output_path}))
 
-    # Scan tmp dir for any file starting with the uid (basename of output_path)
-    uid = os.path.basename(output_path).replace(".mp4", "")
-    tmp_dir = os.path.dirname(output_path)
-    
-    for f in os.listdir(tmp_dir):
-        if f.startswith(uid):
-            full_path = os.path.join(tmp_dir, f)
-            print(json.dumps({"ok": True, "path": full_path}))
-            return
 
-    print(json.dumps({"ok": False, "error": "Output file not found after download"}))
-    sys.exit(1)
-    
+# -----------------------------
+# DOWNLOAD MP3
+# -----------------------------
+def cmd_download_mp3(url, output_path, cookies_path=None):
+    run_cmd_with_retry(
+        url,
+        [
+            "-f", "bestaudio",
+            "-x",
+            "--audio-format", "mp3",
+            "--audio-quality", "192K",
+            "--overwrites",
+            "-o", output_path,
+        ],
+        cookies_path
+    )
 
-def cmd_download_mp3(url, itag, output_path, cookies_path=None):
-    opts = get_opts(cookies_path)
-    opts.update({
-        "format": itag,
-        "outtmpl": {"default": output_path},  # ← dict form forces exact path
-        "no_playlist": True,
-        "overwrites": True,
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }],
-    })
+    print(json.dumps({"ok": True, "path": output_path}))
 
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        ydl.download([url])
 
-    uid = os.path.basename(output_path)
-    tmp_dir = os.path.dirname(output_path)
 
-    for f in os.listdir(tmp_dir):
-        if f.startswith(uid):
-            full_path = os.path.join(tmp_dir, f)
-            print(json.dumps({"ok": True, "path": full_path}))
-            return
+# -----------------------------
+# RESOLVE DIRECT URL (no download)
+# -----------------------------
+def cmd_resolve(url, itag, cookies_path=None):
+    raw = run_cmd_with_retry(url, [
+        "--dump-json",
+        "-f", itag,
+    ], cookies_path)
 
-    print(json.dumps({"ok": False, "error": "MP3 output file not found"}))
-    sys.exit(1)
-      
+    info = json.loads(raw)
 
+    # Find the matching format and extract its direct URL
+    formats = info.get("formats", [])
+    target = None
+
+    for f in formats:
+        fid = f.get("format_id", "")
+        if fid == itag:
+            target = f
+            break
+
+    # For combined formats like "123+456", yt-dlp merges them.
+    # In resolve mode we return the best available direct URL.
+    # If no exact match, use the url from the top-level info (best merged).
+    direct_url = (target or {}).get("url") or info.get("url")
+    ext = (target or {}).get("ext", "mp4")
+    title = info.get("title", "video")
+
+    if not direct_url:
+        print(json.dumps({"ok": False, "error": "Could not resolve direct URL"}))
+        sys.exit(1)
+
+    print(json.dumps({
+        "ok": True,
+        "directUrl": direct_url,
+        "ext": ext,
+        "title": title,
+    }))
+
+# -----------------------------
+# MAIN
+# -----------------------------
 if __name__ == "__main__":
     try:
         action = sys.argv[1]
 
         if action == "info":
-            url = sys.argv[2]
-            cookies = sys.argv[3] if len(sys.argv) > 3 else None
-            cmd_info(url, cookies)
+            cmd_info(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)
 
         elif action == "mp4":
-            url = sys.argv[2]
-            itag = sys.argv[3]
-            output = sys.argv[4]
-            cookies = sys.argv[5] if len(sys.argv) > 5 else None
-            cmd_download_mp4(url, itag, output, cookies)
+            cmd_download_mp4(
+                sys.argv[2],
+                sys.argv[3],
+                sys.argv[4] if len(sys.argv) > 4 else None
+            )
 
         elif action == "mp3":
-            url = sys.argv[2]
-            itag = sys.argv[3]
-            output = sys.argv[4]
-            cookies = sys.argv[5] if len(sys.argv) > 5 else None
-            cmd_download_mp3(url, itag, output, cookies)
+            cmd_download_mp3(
+                sys.argv[2],
+                sys.argv[3],
+                sys.argv[4] if len(sys.argv) > 4 else None
+            )
+
+        elif action == "resolve":
+            cmd_resolve(
+                sys.argv[2],   # url
+                sys.argv[3],   # itag
+                sys.argv[4] if len(sys.argv) > 4 else None   # cookies
+            )
 
         else:
-            print(json.dumps({"ok": False, "error": f"Unknown action: {action}"}))
+            print(json.dumps({"ok": False, "error": "Invalid action"}))
             sys.exit(1)
 
     except Exception as e:
