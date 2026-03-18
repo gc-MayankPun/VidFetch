@@ -15,7 +15,7 @@ export const BROWSER_ARGS = [
   "--add-header",
   "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "--extractor-args",
-  "youtube:player_client=web,mweb", // use the web player client — avoids bot checks
+  "--extractor-args", "youtube:player_client=android", // use the web player client — avoids bot checks
 ];
 
 export const TMP_DIR = path.resolve(__dirname, "../../../tmp");
