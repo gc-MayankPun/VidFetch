@@ -9,6 +9,12 @@ import time
 # Use YTDLP_BIN from env if available (set by Node.js)
 YTDLP_BIN = os.environ.get("YTDLP_BIN", "yt-dlp")
 
+import subprocess as _sp
+_node_check = _sp.run(["which", "node"], capture_output=True, text=True)
+print(f"node path: {_node_check.stdout.strip()}", file=sys.stderr)
+_node_version = _sp.run(["node", "--version"], capture_output=True, text=True)
+print(f"node version: {_node_version.stdout.strip()}", file=sys.stderr)
+
 # -----------------------------
 # Ensure Node is available
 # -----------------------------
