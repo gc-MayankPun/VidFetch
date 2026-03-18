@@ -7,6 +7,7 @@ import {
   runPython,
   TMP_DIR,
   COOKIES_PATH,
+  YTDLP_BIN,
 } from "../utils/utils.js";
 
 const cookiesArgs = existsSync(COOKIES_PATH) ? ["--cookies", COOKIES_PATH] : [];
@@ -73,7 +74,7 @@ async function downloadController(req, res) {
       res.setHeader("Content-Type", "audio/webm");
       res.setHeader("Transfer-Encoding", "chunked");
 
-      const child = spawn("yt-dlp", [
+      const child = spawn(YTDLP_BIN, [
         "-f", "bestaudio[ext=webm]/bestaudio",
         "-o", "-",
         ...cookiesArgs,
@@ -119,8 +120,8 @@ async function downloadController(req, res) {
       res.setHeader("Content-Type", "video/mp4");
       res.setHeader("Transfer-Encoding", "chunked");
 
-      const child = spawn("yt-dlp", [
-        "-f", "best[ext=mp4]",  // single pre-merged format, no ffmpeg merge needed
+      const child = spawn(YTDLP_BIN, [
+        "-f", "best[ext=mp4]",
         "-o", "-",
         ...cookiesArgs,
         "--user-agent", USER_AGENT,

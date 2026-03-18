@@ -3,6 +3,7 @@ import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import path from "path";
 
+export const YTDLP_BIN = existsSync("/app/yt-dlp") ? "/app/yt-dlp" : "yt-dlp";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ── Cookies ───────────────────────────────────────────────────────────────────
@@ -18,20 +19,21 @@ export const PYTHON_SCRIPT = path.resolve(__dirname, "./ytdlp.py");
 export const TMP_DIR = path.resolve(__dirname, "../../../tmp");
 if (!existsSync(TMP_DIR)) mkdirSync(TMP_DIR, { recursive: true });
 
-/**
- * Run ytdlp.py with given args.
- * Returns parsed JSON from stdout.
- */
 export function runPython(args) {
   return new Promise((resolve, reject) => {
     const cookiesArg = existsSync(COOKIES_PATH) ? [COOKIES_PATH] : [];
-    const proc = spawn("python3", [PYTHON_SCRIPT, ...args, ...cookiesArg]);
+    const proc = spawn("python3", [PYTHON_SCRIPT, ...args, ...cookiesArg], {
+      env: { ...process.env, YTDLP_BIN }, // ← pass binary path to python
+    });
 
     let stdout = "";
     let stderr = "";
 
     proc.stdout.on("data", (d) => (stdout += d));
-    proc.stderr.on("data", (d) => (stderr += d));
+    proc.stderr.on("data", (d) => {
+      console.error("[python stderr]:", d.toString()); // ← helpful for debugging
+      stderr += d;
+    });
 
     proc.on("close", (code) => {
       if (code === 0) {
@@ -41,7 +43,6 @@ export function runPython(args) {
           reject(new Error(`Failed to parse python output: ${stdout}`));
         }
       } else {
-        // Try to parse error JSON from stderr
         try {
           const errJson = JSON.parse(stderr);
           reject(new Error(errJson.error || stderr));
