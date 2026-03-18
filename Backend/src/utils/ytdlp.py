@@ -13,15 +13,29 @@ import sys
 import json
 import os
 import yt_dlp
+import logging
+
+# Redirect yt-dlp internal logs to stderr so they don't corrupt our JSON stdout
+class StderrLogger:
+    def debug(self, msg):
+        print(msg, file=sys.stderr)
+    def info(self, msg):
+        print(msg, file=sys.stderr)
+    def warning(self, msg):
+        print(msg, file=sys.stderr)
+    def error(self, msg):
+        print(msg, file=sys.stderr)
 
 
 def get_opts(cookies_path=None):
     opts = {
         "quiet": True,
-        "no_warnings": False,
+        "no_warnings": True,
+        "noprogress": True,
+        "logger": StderrLogger(),   # ← all yt-dlp output goes to stderr
         "extractor_args": {
             "youtube": {
-                "player_client": ["ios"],   # ios client avoids n-challenge
+                "player_client": ["tv_embedded", "web"],
             }
         },
     }
@@ -115,27 +129,40 @@ def cmd_info(url, cookies_path=None):
 
 
 def cmd_download_mp4(url, itag, output_path, cookies_path=None):
+    # print(f"[mp4] url={url} itag={itag} output={output_path}", file=sys.stderr)
     opts = get_opts(cookies_path)
     opts.update({
         "format": itag,
-        "outtmpl": output_path,
+        "outtmpl": {"default": output_path},  # ← dict form forces exact path
         "merge_output_format": "mp4",
         "no_playlist": True,
+        "overwrites": True,
     })
 
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([url])
 
-    print(json.dumps({"ok": True, "path": output_path}))
+    # Scan tmp dir for any file starting with the uid (basename of output_path)
+    uid = os.path.basename(output_path).replace(".mp4", "")
+    tmp_dir = os.path.dirname(output_path)
+    
+    for f in os.listdir(tmp_dir):
+        if f.startswith(uid):
+            full_path = os.path.join(tmp_dir, f)
+            print(json.dumps({"ok": True, "path": full_path}))
+            return
 
+    print(json.dumps({"ok": False, "error": "Output file not found after download"}))
+    sys.exit(1)
+    
 
 def cmd_download_mp3(url, itag, output_path, cookies_path=None):
     opts = get_opts(cookies_path)
     opts.update({
         "format": itag,
-        # output base path without extension — yt-dlp adds .mp3
-        "outtmpl": output_path,
+        "outtmpl": {"default": output_path},  # ← dict form forces exact path
         "no_playlist": True,
+        "overwrites": True,
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
@@ -146,8 +173,18 @@ def cmd_download_mp3(url, itag, output_path, cookies_path=None):
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([url])
 
-    print(json.dumps({"ok": True, "path": output_path + ".mp3"}))
+    uid = os.path.basename(output_path)
+    tmp_dir = os.path.dirname(output_path)
 
+    for f in os.listdir(tmp_dir):
+        if f.startswith(uid):
+            full_path = os.path.join(tmp_dir, f)
+            print(json.dumps({"ok": True, "path": full_path}))
+            return
+
+    print(json.dumps({"ok": False, "error": "MP3 output file not found"}))
+    sys.exit(1)
+      
 
 if __name__ == "__main__":
     try:

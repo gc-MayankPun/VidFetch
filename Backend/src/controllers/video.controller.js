@@ -1,16 +1,11 @@
-import { spawn } from "child_process";
 import { existsSync, readdirSync, unlinkSync } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import {
   isValidYouTubeUrl,
   runPython,
-  COOKIES_PATH,
-  PYTHON_SCRIPT,
   TMP_DIR,
 } from "../utils/utils.js";
-
-const YT_DLP = process.env.YTDLP_PATH || "yt-dlp";
 
 // ─── POST /api/videos/info ────────────────────────────────────────────────────
 
@@ -59,36 +54,35 @@ async function videoInfoController(req, res) {
 // ─── GET /api/videos/download ─────────────────────────────────────────────────
 
 async function downloadController(req, res) {
-  const { url, itag, type } = req.query;
+  const { url, itag, type } = req.query; 
 
   if (!url || !itag)
     return res.status(400).json({ message: "url and itag are required" });
   if (!isValidYouTubeUrl(url))
     return res.status(400).json({ message: "Invalid YouTube URL" });
 
-  // ── MP3 via Python ────────────────────────────────────────────────────────
+  // ── MP3 ───────────────────────────────────────────────────────────────────
   if (type === "mp3") {
     const uid = randomUUID();
     const tmpBase = path.join(TMP_DIR, uid);
-    const expectedPath = `${tmpBase}.mp3`;
 
     try {
-      await runPython(["mp3", url, itag, tmpBase]);
+      const result = await runPython(["mp3", url, itag, tmpBase]);
+      if (!result.ok) throw new Error(result.error);
 
-      let finalPath = expectedPath;
+      // Use path returned by Python — it knows the exact output filename
+      let finalPath = result.path;
       if (!existsSync(finalPath)) {
+        // Fallback: scan tmp dir for any file starting with uid
         const match = readdirSync(TMP_DIR).find((f) => f.startsWith(uid));
-        if (!match)
-          throw new Error("MP3 output file not found after conversion");
+        if (!match) throw new Error("MP3 output file not found after conversion");
         finalPath = path.join(TMP_DIR, match);
       }
 
       res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
       res.setHeader("Content-Type", "audio/mpeg");
       res.sendFile(path.resolve(finalPath), () => {
-        try {
-          unlinkSync(finalPath);
-        } catch {}
+        try { unlinkSync(finalPath); } catch {}
       });
     } catch (err) {
       console.error("MP3 conversion error:", err.message);
@@ -98,22 +92,35 @@ async function downloadController(req, res) {
     return;
   }
 
-  // ── MP4 via Python (writes to tmp then streams) ───────────────────────────
+  // ── MP4 ───────────────────────────────────────────────────────────────────
+  // if (type === "mp4") {
+  //   const uid = randomUUID();
+  //   const tmpFile = path.join(TMP_DIR, `${uid}.mp4`);
+
+  //   try {
+  //     const result = await runPython(["mp4", url, itag, tmpFile]);
+  //     if (!result.ok) throw new Error(result.error);
+
   if (type === "mp4") {
-    const uid = randomUUID();
-    const tmpFile = path.join(TMP_DIR, `${uid}.mp4`);
+  const uid = randomUUID();
+  const tmpFile = path.join(TMP_DIR, `${uid}.mp4`);
 
-    try {
-      await runPython(["mp4", url, itag, tmpFile]);
-
-      if (!existsSync(tmpFile)) throw new Error("MP4 output file not found");
+  try {
+    console.log("Starting MP4 download:", { url, itag, tmpFile });
+    const result = await runPython(["mp4", url, itag, tmpFile]);
+    console.log("Python result:", result);
+      // Use path returned by Python — it knows the exact output filename
+      let finalPath = result.path;
+      if (!existsSync(finalPath)) {
+        const match = readdirSync(TMP_DIR).find((f) => f.startsWith(uid));
+        if (!match) throw new Error("MP4 output file not found");
+        finalPath = path.join(TMP_DIR, match);
+      }
 
       res.setHeader("Content-Disposition", `attachment; filename="video.mp4"`);
       res.setHeader("Content-Type", "video/mp4");
-      res.sendFile(path.resolve(tmpFile), () => {
-        try {
-          unlinkSync(tmpFile);
-        } catch {}
+      res.sendFile(path.resolve(finalPath), () => {
+        try { unlinkSync(finalPath); } catch {}
       });
     } catch (err) {
       console.error("MP4 download error:", err.message);
@@ -139,10 +146,7 @@ async function thumbnailController(req, res) {
     const contentType = response.headers.get("content-type") || "image/jpeg";
     const ext = contentType.includes("png") ? "png" : "jpg";
 
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="thumbnail.${ext}"`,
-    );
+    res.setHeader("Content-Disposition", `attachment; filename="thumbnail.${ext}"`);
     res.setHeader("Content-Type", contentType);
     const buffer = await response.arrayBuffer();
     res.send(Buffer.from(buffer));
