@@ -4,6 +4,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import {
   isValidYouTubeUrl,
+  normalizeYouTubeUrl,
   runPython,
   TMP_DIR,
   COOKIES_PATH,
@@ -23,7 +24,8 @@ async function videoInfoController(req, res) {
   }
 
   try {
-    const result = await runPython(["info", url]);
+    const cleanUrl = normalizeYouTubeUrl(url);
+    const result = await runPython(["info", cleanUrl]);
 
     if (!result.ok) {
       throw new Error(result.error || "Unknown error from python script");
@@ -36,7 +38,7 @@ async function videoInfoController(req, res) {
         thumbnail: result.thumbnail,
         duration: result.duration,
         formats: result.formats,
-        url,
+        url: cleanUrl,  // ← return cleanUrl so downloads also use it
       },
     });
   } catch (err) {
@@ -67,6 +69,8 @@ async function downloadController(req, res) {
   if (!isValidYouTubeUrl(url))
     return res.status(400).json({ message: "Invalid YouTube URL" });
 
+  const cleanUrl = normalizeYouTubeUrl(url);
+
   // ── MP3 ───────────────────────────────────────────────────────────────────
   if (type === "mp3") {
     try {
@@ -82,7 +86,7 @@ async function downloadController(req, res) {
         "--extractor-args", "youtube:player_client=web",
         "--socket-timeout", "30",
         "--http-chunk-size", "1048576",
-        url,
+        cleanUrl,
       ]);
 
       child.stdout.pipe(res);
@@ -128,7 +132,7 @@ async function downloadController(req, res) {
         "--extractor-args", "youtube:player_client=web",
         "--socket-timeout", "30",
         "--http-chunk-size", "1048576",
-        url,
+        cleanUrl,
       ]);
 
       child.stdout.pipe(res);

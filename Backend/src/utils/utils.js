@@ -62,6 +62,34 @@ export function runPython(args) {
   });
 }
 
+export function normalizeYouTubeUrl(url) {
+  try {
+    const u = new URL(url);
+    
+    // Convert Shorts URL to regular watch URL
+    if (u.pathname.startsWith("/shorts/")) {
+      const videoId = u.pathname.replace("/shorts/", "");
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+
+    // Strip tracking params from youtu.be
+    if (u.hostname === "youtu.be") {
+      const videoId = u.pathname.replace("/", "");
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+
+    // For regular URLs keep v param only
+    const videoId = u.searchParams.get("v");
+    if (videoId) {
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+
+    return url;
+  } catch {
+    return url;
+  }
+}
+
 export function isValidYouTubeUrl(url) {
   try {
     const u = new URL(url);
