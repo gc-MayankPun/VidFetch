@@ -198,6 +198,46 @@ def cmd_download_mp3(url, output_path, cookies_path=None):
     print(json.dumps({"ok": True, "path": output_path}))
 
 
+
+# -----------------------------
+# RESOLVE DIRECT URL (no download)
+# -----------------------------
+def cmd_resolve(url, itag, cookies_path=None):
+    raw = run_cmd_with_retry(url, [
+        "--dump-json",
+        "-f", itag,
+    ], cookies_path)
+
+    info = json.loads(raw)
+
+    # Find the matching format and extract its direct URL
+    formats = info.get("formats", [])
+    target = None
+
+    for f in formats:
+        fid = f.get("format_id", "")
+        if fid == itag:
+            target = f
+            break
+
+    # For combined formats like "123+456", yt-dlp merges them.
+    # In resolve mode we return the best available direct URL.
+    # If no exact match, use the url from the top-level info (best merged).
+    direct_url = (target or {}).get("url") or info.get("url")
+    ext = (target or {}).get("ext", "mp4")
+    title = info.get("title", "video")
+
+    if not direct_url:
+        print(json.dumps({"ok": False, "error": "Could not resolve direct URL"}))
+        sys.exit(1)
+
+    print(json.dumps({
+        "ok": True,
+        "directUrl": direct_url,
+        "ext": ext,
+        "title": title,
+    }))
+
 # -----------------------------
 # MAIN
 # -----------------------------
@@ -220,6 +260,13 @@ if __name__ == "__main__":
                 sys.argv[2],
                 sys.argv[3],
                 sys.argv[4] if len(sys.argv) > 4 else None
+            )
+
+        elif action == "resolve":
+            cmd_resolve(
+                sys.argv[2],   # url
+                sys.argv[3],   # itag
+                sys.argv[4] if len(sys.argv) > 4 else None   # cookies
             )
 
         else:

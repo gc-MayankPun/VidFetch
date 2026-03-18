@@ -26,15 +26,18 @@ export const useVideo = () => {
   }
 
   // Download MP4 or MP3
-  function handleDownload(format) {
-    if (!video?.url) return;
-    downloadFormat({
+  async function handleDownload(format) {
+  if (!video?.url) return;
+  try {
+    await downloadFormat({
       videoUrl: video.url,
       itag: format.itag,
-      type: format.type,   // "mp4" or "mp3"
+      type: format.type,
     });
+  } catch (err) {
+    toast.error(err.message || "Download failed. Please try again.");
   }
-
+}
   // Download thumbnail
   function handleThumbnailDownload() {
     if (!video?.thumbnail) return;

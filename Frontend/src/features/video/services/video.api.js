@@ -36,16 +36,36 @@ export async function fetchVideoInfo({ videoUrl }) {
 //   window.location.href = `${base}/api/videos/thumbnail?${params}`;
 // }
 
-export function downloadFormat({ videoUrl, itag, type }) {
+export async function downloadFormat({ videoUrl, itag, type }) {
   const base = import.meta.env.VITE_API_URL;
   const params = new URLSearchParams({ url: videoUrl, itag, type });
 
-  const a = document.createElement("a");
-  a.href = `${base}/api/videos/download?${params}`;
-  a.style.display = "none";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  if (type === "mp4") {
+    // Option 3: ask backend to resolve the direct CDN URL, browser downloads it
+    try {
+      const response = await api.get(`/api/videos/download?${params}`);
+      const { directUrl, title, ext } = response.data;
+
+      const a = document.createElement("a");
+      a.href = directUrl;
+      a.download = `${title}.${ext}`;
+      a.target = "_blank"; // fallback if CORS blocks download attr
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      throw err.response?.data || { message: "Failed to get download link" };
+    }
+  } else {
+    // MP3: still streams from backend (needs ffmpeg conversion)
+    const a = document.createElement("a");
+    a.href = `${base}/api/videos/download?${params}`;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
 }
 
 export function downloadThumbnail({ thumbnailUrl }) {
