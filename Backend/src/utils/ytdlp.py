@@ -1,69 +1,50 @@
 #!/usr/bin/env python3
-"""
-ytdlp.py — yt-dlp Python library wrapper
-Called from Node.js controller via spawn('python3', ['ytdlp.py', action, ...args])
-
-Usage:
-  python3 ytdlp.py info <url> [cookies_path]
-  python3 ytdlp.py download <url> <itag> <output_path> [cookies_path]
-  python3 ytdlp.py mp3 <url> <itag> <output_path> [cookies_path]
-"""
-
 import sys
 import json
 import os
-import yt_dlp
-import logging
 import shutil
 import subprocess
 
-# Redirect yt-dlp internal logs to stderr so they don't corrupt our JSON stdout
-class StderrLogger:
-    def debug(self, msg):
-        print(msg, file=sys.stderr)
-    def info(self, msg):
-        print(msg, file=sys.stderr)
-    def warning(self, msg):
-        print(msg, file=sys.stderr)
-    def error(self, msg):
-        print(msg, file=sys.stderr)
-
-
-import os
-import shutil
-
-# Set PATH at module level — before any yt-dlp calls
-_node_path = (
+# Ensure node is in PATH for n-challenge solving
+_node = (
     shutil.which("node") or
     "/opt/render/project/nodes/node-22.22.0/bin/node"
 )
-if _node_path and os.path.exists(_node_path):
-    _node_dir = os.path.dirname(_node_path)
+if _node and os.path.exists(_node):
+    _node_dir = os.path.dirname(_node)
     os.environ["PATH"] = f"{_node_dir}:{os.environ.get('PATH', '')}"
 
-def get_opts(cookies_path=None):
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "noprogress": True,
-        "logger": StderrLogger(),
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["web"],
-            }
-        },
-    }
+
+def base_cmd(cookies_path=None):
+    """Build base yt-dlp CLI command with common args."""
+    cmd = [
+        "yt-dlp",
+        "--no-playlist",
+        "--no-warnings",
+        "--extractor-args", "youtube:player_client=web",
+    ]
     if cookies_path and os.path.exists(cookies_path):
-        opts["cookiefile"] = cookies_path
-    return opts
- 
+        cmd += ["--cookies", cookies_path]
+    return cmd
+
+
+def run_cmd(cmd):
+    """Run a command and return stdout. Raises on non-zero exit."""
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+    )
+    if result.returncode != 0:
+        raise Exception(result.stderr.strip() or f"yt-dlp exited with code {result.returncode}")
+    return result.stdout.strip()
+
 
 def cmd_info(url, cookies_path=None):
-    opts = get_opts(cookies_path)
-    opts["skip_download"] = True
-
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
+    cmd = base_cmd(cookies_path) + ["--dump-json", url]
+    raw = run_cmd(cmd)
+    info = json.loads(raw)
 
     formats = info.get("formats", [])
 
@@ -76,7 +57,7 @@ def cmd_info(url, cookies_path=None):
     combined.sort(key=lambda f: f.get("height") or 0, reverse=True)
     best_combined = combined[0] if combined else None
 
-    # Best video-only (DASH)
+    # Best DASH video-only
     video_only = [
         f for f in formats
         if f.get("vcodec") and f["vcodec"] != "none"
@@ -124,13 +105,12 @@ def cmd_info(url, cookies_path=None):
         })
 
     # Best thumbnail
-    thumbnails = info.get("thumbnails") or []
-    thumbnails_sorted = sorted(
-        [t for t in thumbnails if t.get("url")],
+    thumbnails = sorted(
+        [t for t in (info.get("thumbnails") or []) if t.get("url")],
         key=lambda t: (t.get("width") or 0) * (t.get("height") or 0),
         reverse=True,
     )
-    best_thumb = thumbnails_sorted[0]["url"] if thumbnails_sorted else info.get("thumbnail", "")
+    best_thumb = thumbnails[0]["url"] if thumbnails else info.get("thumbnail", "")
 
     print(json.dumps({
         "ok": True,
@@ -143,23 +123,19 @@ def cmd_info(url, cookies_path=None):
 
 
 def cmd_download_mp4(url, itag, output_path, cookies_path=None):
-    # print(f"[mp4] url={url} itag={itag} output={output_path}", file=sys.stderr)
-    opts = get_opts(cookies_path)
-    opts.update({
-        "format": itag,
-        "outtmpl": {"default": output_path},  # ← dict form forces exact path
-        "merge_output_format": "mp4",
-        "no_playlist": True,
-        "overwrites": True,
-    })
+    cmd = base_cmd(cookies_path) + [
+        "-f", itag,
+        "--merge-output-format", "mp4",
+        "--overwrites",
+        "-o", output_path,
+        url,
+    ]
+    run_cmd(cmd)
 
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        ydl.download([url])
-
-    # Scan tmp dir for any file starting with the uid (basename of output_path)
+    # Find the actual output file
     uid = os.path.basename(output_path).replace(".mp4", "")
     tmp_dir = os.path.dirname(output_path)
-    
+
     for f in os.listdir(tmp_dir):
         if f.startswith(uid):
             full_path = os.path.join(tmp_dir, f)
@@ -168,24 +144,19 @@ def cmd_download_mp4(url, itag, output_path, cookies_path=None):
 
     print(json.dumps({"ok": False, "error": "Output file not found after download"}))
     sys.exit(1)
-    
+
 
 def cmd_download_mp3(url, itag, output_path, cookies_path=None):
-    opts = get_opts(cookies_path)
-    opts.update({
-        "format": itag,
-        "outtmpl": {"default": output_path},  # ← dict form forces exact path
-        "no_playlist": True,
-        "overwrites": True,
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }],
-    })
-
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        ydl.download([url])
+    cmd = base_cmd(cookies_path) + [
+        "-f", itag,
+        "-x",
+        "--audio-format", "mp3",
+        "--audio-quality", "192K",
+        "--overwrites",
+        "-o", output_path,
+        url,
+    ]
+    run_cmd(cmd)
 
     uid = os.path.basename(output_path)
     tmp_dir = os.path.dirname(output_path)
@@ -198,11 +169,12 @@ def cmd_download_mp3(url, itag, output_path, cookies_path=None):
 
     print(json.dumps({"ok": False, "error": "MP3 output file not found"}))
     sys.exit(1)
-      
+
 
 if __name__ == "__main__":
     try:
         action = sys.argv[1]
+        cookies = None
 
         if action == "info":
             url = sys.argv[2]
