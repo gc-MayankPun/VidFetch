@@ -67,41 +67,39 @@ async function downloadController(req, res) {
     const tmpBase = path.join(TMP_DIR, uid);
 
     try {
+      // Arguments: url, itag, output_dir (not output filename)
       const result = await runPython(["mp3", url, itag, tmpBase]);
       if (!result.ok) throw new Error(result.error);
 
-      // Use path returned by Python — it knows the exact output filename
+      // Use path returned by Python
       let finalPath = result.path;
       if (!existsSync(finalPath)) {
-        // Fallback: scan tmp dir for any file starting with uid
-        const match = readdirSync(TMP_DIR).find((f) => f.startsWith(uid));
-        if (!match) throw new Error("MP3 output file not found after conversion");
-        finalPath = path.join(TMP_DIR, match);
+        // Fallback: scan tmp dir for any MP3 file starting with uid
+        const files = readdirSync(tmpBase).filter(f => f.endsWith('.mp3'));
+        if (files.length === 0) throw new Error("MP3 output file not found after conversion");
+        finalPath = path.join(tmpBase, files[0]);
       }
 
-      res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
+      res.setHeader("Content-Disposition", `attachment; filename="${path.basename(finalPath)}"`);
       res.setHeader("Content-Type", "audio/mpeg");
-      res.sendFile(path.resolve(finalPath), () => {
-        try { unlinkSync(finalPath); } catch {}
+      res.sendFile(path.resolve(finalPath), (err) => {
+        // Clean up after sending
+        try {
+          if (existsSync(finalPath)) unlinkSync(finalPath);
+        } catch (e) {
+          console.error("Cleanup error:", e);
+        }
       });
     } catch (err) {
       console.error("MP3 conversion error:", err.message);
       if (!res.headersSent)
-        res.status(500).json({ message: "MP3 conversion failed" });
+        res.status(500).json({ message: "MP3 conversion failed: " + err.message });
     }
     return;
   }
 
   // ── MP4 ───────────────────────────────────────────────────────────────────
-  // if (type === "mp4") {
-  //   const uid = randomUUID();
-  //   const tmpFile = path.join(TMP_DIR, `${uid}.mp4`);
-
-  //   try {
-  //     const result = await runPython(["mp4", url, itag, tmpFile]);
-  //     if (!result.ok) throw new Error(result.error);
-
-  // ── MP4 (Option 3: resolve direct URL, let browser download) ─────────────
+  // MP4 (Option 3: resolve direct URL, let browser download)
   if (type === "mp4") {
     try {
       const result = await runPython(["resolve", url, itag]);
@@ -115,7 +113,7 @@ async function downloadController(req, res) {
     } catch (err) {
       console.error("MP4 resolve error:", err.message);
       if (!res.headersSent)
-        return res.status(500).json({ message: "Failed to resolve video URL" });
+        return res.status(500).json({ message: "Failed to resolve video URL: " + err.message });
     }
     return;
   }
