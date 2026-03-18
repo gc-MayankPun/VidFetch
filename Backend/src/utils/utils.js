@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -6,6 +6,14 @@ import path from "path";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const YT_DLP = process.env.YTDLP_PATH || "yt-dlp";
 
+// ── Cookies ───────────────────────────────────────────────────────────────────
+const COOKIES_PATH = path.resolve(__dirname, "../../../cookies.txt");
+if (process.env.YOUTUBE_COOKIES) {
+  writeFileSync(COOKIES_PATH, process.env.YOUTUBE_COOKIES, "utf-8");
+  console.log("[yt-dlp] cookies.txt written from env var");
+}
+
+// ── Proxy (optional) ──────────────────────────────────────────────────────────
 const PROXY_ARGS = process.env.YTDLP_PROXY
   ? ["--proxy", process.env.YTDLP_PROXY]
   : [];
@@ -19,6 +27,7 @@ export const BROWSER_ARGS = [
   "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "--extractor-args",
   "youtube:player_client=web,mweb",
+  ...(existsSync(COOKIES_PATH) ? ["--cookies", COOKIES_PATH] : []),
   ...PROXY_ARGS,
 ];
 
