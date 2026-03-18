@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, unlinkSync } from "fs";
+import { spawn } from "child_process";
 import path from "path";
 import { randomUUID } from "crypto";
 import {
@@ -54,7 +54,7 @@ async function videoInfoController(req, res) {
 // ─── GET /api/videos/download ─────────────────────────────────────────────────
 
 async function downloadController(req, res) {
-  const { url, itag, type } = req.query; 
+  const { url, itag, type } = req.query;
 
   if (!url || !itag)
     return res.status(400).json({ message: "url and itag are required" });
@@ -63,60 +63,82 @@ async function downloadController(req, res) {
 
   // ── MP3 ───────────────────────────────────────────────────────────────────
   if (type === "mp3") {
-    const uid = randomUUID();
-    const outputPath = path.join(TMP_DIR, `${uid}.mp3`);
-
     try {
-      // Arguments: url, itag, output_path (full path with filename)
-      const result = await runPython(["mp3", url, itag, outputPath]);
-      if (!result.ok) throw new Error(result.error);
-
-      const finalPath = result.path;
-      if (!existsSync(finalPath)) {
-        throw new Error("MP3 output file not found after conversion");
-      }
-
       res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
       res.setHeader("Content-Type", "audio/mpeg");
-      res.sendFile(path.resolve(finalPath), (err) => {
-        // Clean up after sending
-        try {
-          if (existsSync(finalPath)) unlinkSync(finalPath);
-        } catch (e) {
-          console.error("Cleanup error:", e);
+      res.setHeader("Transfer-Encoding", "chunked");
+
+      // Stream directly from yt-dlp to browser
+      const child = spawn("yt-dlp", [
+        "-f", itag,
+        "-x",
+        "--audio-format", "mp3",
+        "--audio-quality", "192K",
+        "-o", "-",  // Output to stdout
+        url,
+      ]);
+
+      child.stdout.pipe(res);
+
+      child.stderr.on("data", (data) => {
+        console.error("yt-dlp error:", data.toString());
+      });
+
+      child.on("error", (err) => {
+        console.error("MP3 streaming error:", err);
+        if (!res.headersSent) {
+          res.status(500).json({ message: "MP3 streaming failed" });
+        } else {
+          res.end();
+        }
+      });
+
+      child.on("exit", (code) => {
+        if (code !== 0 && !res.headersSent) {
+          res.status(500).json({ message: "MP3 conversion failed" });
         }
       });
     } catch (err) {
-      console.error("MP3 conversion error:", err.message);
+      console.error("MP3 download error:", err.message);
       if (!res.headersSent)
-        res.status(500).json({ message: "MP3 conversion failed: " + err.message });
+        res.status(500).json({ message: "MP3 download failed: " + err.message });
     }
     return;
   }
 
   // ── MP4 ───────────────────────────────────────────────────────────────────
   if (type === "mp4") {
-    const uid = randomUUID();
-    const outputPath = path.join(TMP_DIR, `${uid}.mp4`);
-
     try {
-      // Download MP4 to temp file
-      const result = await runPython(["mp4", url, outputPath]);
-      if (!result.ok) throw new Error(result.error);
-
-      const finalPath = result.path;
-      if (!existsSync(finalPath)) {
-        throw new Error("MP4 output file not found after download");
-      }
-
       res.setHeader("Content-Disposition", `attachment; filename="video.mp4"`);
       res.setHeader("Content-Type", "video/mp4");
-      res.sendFile(path.resolve(finalPath), (err) => {
-        // Clean up after sending
-        try {
-          if (existsSync(finalPath)) unlinkSync(finalPath);
-        } catch (e) {
-          console.error("Cleanup error:", e);
+      res.setHeader("Transfer-Encoding", "chunked");
+
+      // Stream directly from yt-dlp to browser
+      const child = spawn("yt-dlp", [
+        "-f", "bestvideo+bestaudio/best",
+        "--merge-output-format", "mp4",
+        "-o", "-",  // Output to stdout
+        url,
+      ]);
+
+      child.stdout.pipe(res);
+
+      child.stderr.on("data", (data) => {
+        console.error("yt-dlp error:", data.toString());
+      });
+
+      child.on("error", (err) => {
+        console.error("MP4 streaming error:", err);
+        if (!res.headersSent) {
+          res.status(500).json({ message: "MP4 streaming failed" });
+        } else {
+          res.end();
+        }
+      });
+
+      child.on("exit", (code) => {
+        if (code !== 0 && !res.headersSent) {
+          res.status(500).json({ message: "MP4 download failed" });
         }
       });
     } catch (err) {
