@@ -26,8 +26,8 @@ export const BROWSER_ARGS = [
   "--add-header",
   "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "--extractor-args",
-  "youtube:player_client=web",   // removed mweb — it requires PO token
-  "--no-check-formats",           // don't verify each format URL
+  "youtube:player_client=ios",
+  "--no-check-formats",
   ...(existsSync(COOKIES_PATH) ? ["--cookies", COOKIES_PATH] : []),
   ...PROXY_ARGS,
 ];
