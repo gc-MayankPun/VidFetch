@@ -1,18 +1,9 @@
 import { spawn } from "child_process";
-import { existsSync } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-import {
-  isValidYouTubeUrl,
-  normalizeYouTubeUrl,
-  runPython,
-  TMP_DIR,
-  COOKIES_PATH,
-  YTDLP_BIN,
-} from "../utils/utils.js";
-
-const cookiesArgs = existsSync(COOKIES_PATH) ? ["--cookies", COOKIES_PATH] : [];
-const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+import fs from "fs";
+import os from "os";
+import { isValidYouTubeUrl, runPython, TMP_DIR } from "../utils/utils.js";
 
 // ─── POST /api/videos/info ────────────────────────────────────────────────────
 
@@ -24,8 +15,7 @@ async function videoInfoController(req, res) {
   }
 
   try {
-    const cleanUrl = normalizeYouTubeUrl(url);
-    const result = await runPython(["info", cleanUrl]);
+    const result = await runPython(["info", url]);
 
     if (!result.ok) {
       throw new Error(result.error || "Unknown error from python script");
@@ -38,7 +28,7 @@ async function videoInfoController(req, res) {
         thumbnail: result.thumbnail,
         duration: result.duration,
         formats: result.formats,
-        url: cleanUrl,  // ← return cleanUrl so downloads also use it
+        url,
       },
     });
   } catch (err) {
@@ -69,50 +59,70 @@ async function downloadController(req, res) {
   if (!isValidYouTubeUrl(url))
     return res.status(400).json({ message: "Invalid YouTube URL" });
 
-  const cleanUrl = normalizeYouTubeUrl(url);
-
+  // ── MP3 ───────────────────────────────────────────────────────────────────
   // ── MP3 ───────────────────────────────────────────────────────────────────
   if (type === "mp3") {
+    const tmpFile = path.join(os.tmpdir(), `${randomUUID()}.mp3`);
+
     try {
-      res.setHeader("Content-Disposition", `attachment; filename="audio.webm"`);
-      res.setHeader("Content-Type", "audio/webm");
-      res.setHeader("Transfer-Encoding", "chunked");
+      await new Promise((resolve, reject) => {
+        const child = spawn("yt-dlp", [
+          "-x",
+          "--audio-format",
+          "mp3",
+          "--audio-quality",
+          "192K",
+          "-f",
+          "bestaudio/best",
+          "--format-sort",
+          "asr,abr",
+          "--no-format-sort-force",
+          "-o",
+          tmpFile,
+          "--user-agent",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "--extractor-args",
+          "youtube:player_client=web",
+          "--socket-timeout",
+          "30",
+          url,
+        ]);
 
-      const child = spawn(YTDLP_BIN, [
-        "-f", "bestaudio[ext=webm]/bestaudio",
-        "-o", "-",
-        ...cookiesArgs,
-        "--user-agent", USER_AGENT,
-        "--extractor-args", "youtube:player_client=web",
-        "--socket-timeout", "30",
-        "--http-chunk-size", "1048576",
-        cleanUrl,
-      ]);
+        child.stderr.on("data", (data) => {
+          console.error("yt-dlp stderr:", data.toString());
+        });
 
-      child.stdout.pipe(res);
-
-      child.stderr.on("data", (data) => {
-        console.error("yt-dlp stderr:", data.toString());
+        child.on("error", reject);
+        child.on("exit", (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`yt-dlp exited with code ${code}`));
+        });
       });
 
-      child.on("error", (err) => {
-        console.error("MP3 streaming error:", err);
-        if (!res.headersSent) {
-          res.status(500).json({ message: "MP3 streaming failed" });
-        } else {
-          res.end();
-        }
-      });
+      // Verify file exists and is valid
+      if (!fs.existsSync(tmpFile)) {
+        throw new Error("MP3 file was not created");
+      }
 
-      child.on("exit", (code) => {
-        if (code !== 0 && !res.headersSent) {
-          res.status(500).json({ message: "MP3 conversion failed" });
-        }
+      const stat = fs.statSync(tmpFile);
+
+      res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Content-Length", stat.size);
+
+      // Stream temp file to response, then clean up
+      const readStream = fs.createReadStream(tmpFile);
+      readStream.pipe(res);
+      readStream.on("close", () => {
+        fs.unlink(tmpFile, () => {}); // cleanup
       });
     } catch (err) {
       console.error("MP3 download error:", err.message);
+      fs.unlink(tmpFile, () => {}); // cleanup on error
       if (!res.headersSent)
-        res.status(500).json({ message: "MP3 download failed: " + err.message });
+        res
+          .status(500)
+          .json({ message: "MP3 download failed: " + err.message });
     }
     return;
   }
@@ -124,21 +134,29 @@ async function downloadController(req, res) {
       res.setHeader("Content-Type", "video/mp4");
       res.setHeader("Transfer-Encoding", "chunked");
 
-      const child = spawn(YTDLP_BIN, [
-        "-f", "best[ext=mp4]",
-        "-o", "-",
-        ...cookiesArgs,
-        "--user-agent", USER_AGENT,
-        "--extractor-args", "youtube:player_client=web",
-        "--socket-timeout", "30",
-        "--http-chunk-size", "1048576",
-        cleanUrl,
+      // Stream directly from yt-dlp to browser with anti-bot headers
+      const child = spawn("yt-dlp", [
+        "-f",
+        "bestvideo+bestaudio/best",
+        "--merge-output-format",
+        "mp4",
+        "-o",
+        "-", // Output to stdout
+        "--user-agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "--extractor-args",
+        "youtube:player_client=web",
+        "--socket-timeout",
+        "30",
+        "--http-chunk-size",
+        "1048576",
+        url,
       ]);
 
       child.stdout.pipe(res);
 
       child.stderr.on("data", (data) => {
-        console.error("yt-dlp stderr:", data.toString());
+        console.error("yt-dlp error:", data.toString());
       });
 
       child.on("error", (err) => {
@@ -158,7 +176,9 @@ async function downloadController(req, res) {
     } catch (err) {
       console.error("MP4 download error:", err.message);
       if (!res.headersSent)
-        res.status(500).json({ message: "MP4 download failed: " + err.message });
+        res
+          .status(500)
+          .json({ message: "MP4 download failed: " + err.message });
     }
     return;
   }
@@ -179,7 +199,10 @@ async function thumbnailController(req, res) {
     const contentType = response.headers.get("content-type") || "image/jpeg";
     const ext = contentType.includes("png") ? "png" : "jpg";
 
-    res.setHeader("Content-Disposition", `attachment; filename="thumbnail.${ext}"`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="thumbnail.${ext}"`,
+    );
     res.setHeader("Content-Type", contentType);
     const buffer = await response.arrayBuffer();
     res.send(Buffer.from(buffer));
