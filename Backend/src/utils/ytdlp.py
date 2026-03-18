@@ -124,7 +124,7 @@ def cmd_info(url, cookies_path=None):
 
 def cmd_download_mp4(url, itag, output_path, cookies_path=None):
     cmd = base_cmd(cookies_path) + [
-        "-f", itag,
+        "-f", "bestvideo+bestaudio/best",  # ← ignore itag, always use best
         "--merge-output-format", "mp4",
         "--overwrites",
         "-o", output_path,
@@ -132,7 +132,6 @@ def cmd_download_mp4(url, itag, output_path, cookies_path=None):
     ]
     run_cmd(cmd)
 
-    # Find the actual output file
     uid = os.path.basename(output_path).replace(".mp4", "")
     tmp_dir = os.path.dirname(output_path)
 
@@ -148,7 +147,7 @@ def cmd_download_mp4(url, itag, output_path, cookies_path=None):
 
 def cmd_download_mp3(url, itag, output_path, cookies_path=None):
     cmd = base_cmd(cookies_path) + [
-        "-f", itag,
+        "-f", "bestaudio/best",  # ← ignore itag, always use best audio
         "-x",
         "--audio-format", "mp3",
         "--audio-quality", "192K",
@@ -169,7 +168,7 @@ def cmd_download_mp3(url, itag, output_path, cookies_path=None):
 
     print(json.dumps({"ok": False, "error": "MP3 output file not found"}))
     sys.exit(1)
-
+    
 
 if __name__ == "__main__":
     try:
