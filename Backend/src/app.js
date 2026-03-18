@@ -20,8 +20,8 @@ import videoRouter from "./routes/video.routes.js";
 
 app.use("/api/videos", videoRouter);
 
-app.use("*name", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "/public/index.html"));
+app.use("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 export default app;
