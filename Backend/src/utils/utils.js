@@ -17,7 +17,7 @@ const YT_DLP = process.env.YTDLP_PATH || "yt-dlp";
 //   "--extractor-args",
 //   "youtube:player_client=android", // use the web player client — avoids bot checks
 // ];
-const BASE_ARGS = [
+export const BASE_ARGS = [
   "--extractor-args", "youtube:player_client=web;po_token=web+auto",
   "--user-agent", "Mozilla/5.0 ...",
 ];
