@@ -3,7 +3,8 @@ import videoController from "../controllers/video.controller.js";
 import { Router } from "express";
 const videoRouter = Router();
 
-videoRouter.post("/download", downloadLimiter, videoController.videoInfoController);
-videoRouter.get("/download", downloadLimiter, videoController.downloadController);
+videoRouter.post("/info", videoController.videoInfoController);
+videoRouter.get("/download", videoController.downloadController);
+videoRouter.get("/thumbnail", videoController.thumbnailController);
 
 export default videoRouter;

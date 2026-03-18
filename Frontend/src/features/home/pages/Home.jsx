@@ -4,7 +4,7 @@ import Video from "../../video/components/Video";
 import "../styles/home.scss";
 
 const Home = () => {
-  const { loading, video, fetchInfo, downloadVideo, clearVideo } =
+  const {  loading, video, fetchInfo, handleDownload, handleThumbnailDownload, clearVideo } =
     useVideo();
   const [link, setLink] = useState("");
 
@@ -56,7 +56,7 @@ const Home = () => {
 
       {video && (
         <div className="videoContainer">
-          <Video video={video} downloadVideo={downloadVideo} />
+          <Video video={video} handleDownload={handleDownload} handleThumbnailDownload={handleThumbnailDownload} />
         </div>
       )}
     </main>

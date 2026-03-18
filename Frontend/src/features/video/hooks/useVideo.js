@@ -1,43 +1,47 @@
 import { useContext } from "react";
-import { download } from "../services/video.api";
+import { fetchVideoInfo, downloadFormat, downloadThumbnail } from "../services/video.api";
 import { VideoContext } from "../video.context";
 import { formatDuration } from "../utils/video.utils";
 import { toast } from "react-toastify";
 
 export const useVideo = () => {
-  const context = useContext(VideoContext);
-  const { video, setVideo, loading, setLoading } = context;
+  const { video, setVideo, loading, setLoading } = useContext(VideoContext);
 
   // Fetch video info from backend
   async function fetchInfo({ videoUrl }) {
     setLoading(true);
+    setVideo(null);
     try {
-      const response = await download({ videoUrl });
-      console.log(response);
-
+      const response = await fetchVideoInfo({ videoUrl });   // ← was calling download()
       setVideo({
         ...response.video,
         duration: formatDuration(response.video.duration),
       });
-
       toast.success(response.message);
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || "Failed to fetch video");
     } finally {
       setLoading(false);
     }
   }
 
-  const downloadVideo = (format) => {
+  // Download MP4 or MP3
+  function handleDownload(format) {
     if (!video?.url) return;
+    downloadFormat({
+      videoUrl: video.url,
+      itag: format.itag,
+      type: format.type,   // "mp4" or "mp3"
+    });
+  }
 
-    const downloadUrl = `${import.meta.env.VITE_API_URL}/api/videos/download?url=${encodeURIComponent(video.url)}&itag=${format.itag}`;
-    window.location.href = downloadUrl;
-  };
+  // Download thumbnail
+  function handleThumbnailDownload() {
+    if (!video?.thumbnail) return;
+    downloadThumbnail({ thumbnailUrl: video.thumbnail });
+  }
 
-  const clearVideo = () => {
-    setVideo(null);
-  };
+  const clearVideo = () => setVideo(null);
 
-  return { loading, video, fetchInfo, downloadVideo, clearVideo };
+  return { loading, video, fetchInfo, handleDownload, handleThumbnailDownload, clearVideo };
 };
