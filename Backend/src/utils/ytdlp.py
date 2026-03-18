@@ -16,12 +16,22 @@ if _node and os.path.exists(_node):
 
 
 def base_cmd(cookies_path=None):
-    """Build base yt-dlp CLI command with common args."""
+    # Ensure deno and node are in PATH for JS challenge solving
+    for p in [
+        os.path.expanduser("~/.deno/bin"),
+        "/opt/render/project/nodes/node-22.22.0/bin",
+        "/usr/bin",
+        "/usr/local/bin",
+    ]:
+        if os.path.isdir(p) and p not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{p}:{os.environ['PATH']}"
+
     cmd = [
         "yt-dlp",
         "--no-playlist",
         "--no-warnings",
         "--extractor-args", "youtube:player_client=web",
+        "--format-sort", "res,ext:mp4:m4a",
     ]
     if cookies_path and os.path.exists(cookies_path):
         cmd += ["--cookies", cookies_path]
@@ -124,7 +134,7 @@ def cmd_info(url, cookies_path=None):
 
 def cmd_download_mp4(url, itag, output_path, cookies_path=None):
     cmd = base_cmd(cookies_path) + [
-        "-f", "bestvideo+bestaudio/best",  # ← ignore itag, always use best
+        "-f", "95/94/93/18/bestvideo+bestaudio/best",  # ← ignore itag, always use best
         "--merge-output-format", "mp4",
         "--overwrites",
         "-o", output_path,
@@ -147,7 +157,7 @@ def cmd_download_mp4(url, itag, output_path, cookies_path=None):
 
 def cmd_download_mp3(url, itag, output_path, cookies_path=None):
     cmd = base_cmd(cookies_path) + [
-        "-f", "bestaudio/best",  # ← ignore itag, always use best audio
+        "-f", "140/bestaudio/best",  # ← ignore itag, always use best audio
         "-x",
         "--audio-format", "mp3",
         "--audio-quality", "192K",
