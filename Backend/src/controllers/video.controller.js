@@ -9,11 +9,8 @@ import {
   COOKIES_PATH,
 } from "../utils/utils.js";
 
-// Cookies args reused across all spawn calls
 const cookiesArgs = existsSync(COOKIES_PATH) ? ["--cookies", COOKIES_PATH] : [];
-
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 // ─── POST /api/videos/info ────────────────────────────────────────────────────
 
@@ -77,19 +74,13 @@ async function downloadController(req, res) {
       res.setHeader("Transfer-Encoding", "chunked");
 
       const child = spawn("yt-dlp", [
-        "-f",
-        "bestaudio[ext=webm]/bestaudio",
-        "-o",
-        "-",
+        "-f", "bestaudio[ext=webm]/bestaudio",
+        "-o", "-",
         ...cookiesArgs,
-        "--user-agent",
-        USER_AGENT,
-        "--extractor-args",
-        "youtube:player_client=web",
-        "--socket-timeout",
-        "30",
-        "--http-chunk-size",
-        "1048576",
+        "--user-agent", USER_AGENT,
+        "--extractor-args", "youtube:player_client=web",
+        "--socket-timeout", "30",
+        "--http-chunk-size", "1048576",
         url,
       ]);
 
@@ -116,9 +107,7 @@ async function downloadController(req, res) {
     } catch (err) {
       console.error("MP3 download error:", err.message);
       if (!res.headersSent)
-        res
-          .status(500)
-          .json({ message: "MP3 download failed: " + err.message });
+        res.status(500).json({ message: "MP3 download failed: " + err.message });
     }
     return;
   }
@@ -131,21 +120,13 @@ async function downloadController(req, res) {
       res.setHeader("Transfer-Encoding", "chunked");
 
       const child = spawn("yt-dlp", [
-        "-f",
-        "bestvideo+bestaudio/best",
-        "--merge-output-format",
-        "mp4",
-        "-o",
-        "-",
+        "-f", "best[ext=mp4]",  // single pre-merged format, no ffmpeg merge needed
+        "-o", "-",
         ...cookiesArgs,
-        "--user-agent",
-        USER_AGENT,
-        "--extractor-args",
-        "youtube:player_client=web",
-        "--socket-timeout",
-        "30",
-        "--http-chunk-size",
-        "1048576",
+        "--user-agent", USER_AGENT,
+        "--extractor-args", "youtube:player_client=web",
+        "--socket-timeout", "30",
+        "--http-chunk-size", "1048576",
         url,
       ]);
 
@@ -172,9 +153,7 @@ async function downloadController(req, res) {
     } catch (err) {
       console.error("MP4 download error:", err.message);
       if (!res.headersSent)
-        res
-          .status(500)
-          .json({ message: "MP4 download failed: " + err.message });
+        res.status(500).json({ message: "MP4 download failed: " + err.message });
     }
     return;
   }
@@ -195,10 +174,7 @@ async function thumbnailController(req, res) {
     const contentType = response.headers.get("content-type") || "image/jpeg";
     const ext = contentType.includes("png") ? "png" : "jpg";
 
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="thumbnail.${ext}"`,
-    );
+    res.setHeader("Content-Disposition", `attachment; filename="thumbnail.${ext}"`);
     res.setHeader("Content-Type", contentType);
     const buffer = await response.arrayBuffer();
     res.send(Buffer.from(buffer));
