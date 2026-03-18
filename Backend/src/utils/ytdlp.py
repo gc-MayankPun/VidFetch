@@ -38,7 +38,6 @@ def base_cmd(cookies_path=None, client="web"):
     cmd = [
         YTDLP_BIN,
         "--no-playlist",
-        # "--no-warnings",
         "--force-ipv4",
         "--sleep-requests", "2",
         "--socket-timeout", "30",
@@ -74,6 +73,7 @@ def run_cmd_with_retry(url, base_args, cookies_path=None, retries=3):
                 if result.returncode == 0:
                     return result.stdout.strip()
 
+                print(f"[client={client}] stderr: {result.stderr}", file=sys.stderr)
                 last_error = result.stderr.strip()
 
             except subprocess.TimeoutExpired:
