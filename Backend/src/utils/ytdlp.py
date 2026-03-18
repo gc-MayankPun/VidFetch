@@ -14,6 +14,7 @@ import json
 import os
 import yt_dlp
 import logging
+import shutil
 
 # Redirect yt-dlp internal logs to stderr so they don't corrupt our JSON stdout
 class StderrLogger:
@@ -27,21 +28,31 @@ class StderrLogger:
         print(msg, file=sys.stderr)
 
 
+
 def get_opts(cookies_path=None):
+    # Find node binary for n-challenge solving
+    node_path = shutil.which("node") or shutil.which("nodejs")
+    
     opts = {
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
-        "logger": StderrLogger(),   # ← all yt-dlp output goes to stderr
+        "logger": StderrLogger(),
         "extractor_args": {
             "youtube": {
-                "player_client": ["tv_embedded", "web"],
+                "player_client": ["web"],
             }
         },
     }
+    
+    if node_path:
+        opts["extractor_args"]["youtube"]["player_js_eval"] = [f"nodejs:{node_path}"]
+    
     if cookies_path and os.path.exists(cookies_path):
         opts["cookiefile"] = cookies_path
+    
     return opts
+ 
 
 
 def cmd_info(url, cookies_path=None):
