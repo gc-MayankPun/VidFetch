@@ -1,78 +1,55 @@
-# VidFetch - YouTube Video Downloader
+# VidFetch — YouTube Downloader
 
-A modern, full-stack YouTube video downloader application built with **React 19** and **Express.js**, designed to fetch YouTube videos and allow users to download the **best video+audio** format along with an optional **audio-only** format.
+A full-stack YouTube downloader built with **React 19** and **Express.js**, powered by **yt-dlp**. Paste a YouTube URL to download the video as MP4, extract audio as MP3, or save the thumbnail.
 
 ![React](https://img.shields.io/badge/React-v19-61dafb?logo=react)
-![Node.js](https://img.shields.io/badge/Node.js-Express-90c53f?logo=node.js)
-![License](https://img.shields.io/badge/License-MIT-green)
-
----
-
-## 📋 Table of Contents
-
-- [Features](#-features)
-- [Tech Stack](#-tech-stack)
-- [Project Structure](#-project-structure)
-- [Installation](#-installation)
-- [Getting Started](#-getting-started)
-- [API Endpoints](#-api-endpoints)
-- [Frontend Architecture](#-frontend-architecture)
-- [Backend Architecture](#-backend-architecture)
-- [Performance & Security](#-performance--security)
-- [Contributing](#-contributing)
-- [License](#-license)
-- [Acknowledgments](#-acknowledgments)
+![Node.js](https://img.shields.io/badge/Node.js-Express%205-90c53f?logo=node.js)
+![License](https://img.shields.io/badge/License-ISC-green)
 
 ---
 
 ## ✨ Features
 
-### Frontend
-
-- **Modern UI Design**: Clean, sleek interface with smooth animations and transitions.
-- **Responsive Layout**: Optimized for desktop, tablet, and mobile devices.
-- **Real-time Video Info Fetching**: Instantly fetch video title, thumbnail, duration, and available formats.
-- **Download Options**: Shows **best video+audio format** and an optional **audio-only format**.
-- **Loading States**: Beautiful spinner and status indicators while fetching data.
-- **Error Handling**: User-friendly alerts for invalid URLs or download failures.
-
-### Backend
-
-- **YouTube Integration**: Powered by `yt-dlp-exec` for reliable metadata and downloads.
-- **Format Filtering**: Specifically filters for the highest quality combined and audio-only streams.
-- **Rate Limiting**: Protects backend from abuse using `express-rate-limit`.
-- **CORS Enabled**: Secure communication between frontend and backend.
-- **Download Streaming**: Streams media directly to the browser without consuming local server storage.
+- **MP4 Download** — best available quality, DASH streams merged automatically via ffmpeg
+- **MP3 Download** — audio extracted and converted to 192kbps MP3
+- **Thumbnail Download** — highest resolution thumbnail saved as JPG/PNG
+- **Bot bypass** — Chrome user-agent spoofing + YouTube web player client to avoid datacenter IP blocks
+- **SPA served by backend** — single Render deployment, no separate frontend hosting needed
 
 ---
 
 ## 🛠 Tech Stack
 
 ### Frontend
-
-- **React 19.2** & **Vite 8.0**
+- **React 19** & **Vite**
 - **Sass/SCSS** for styling
-- **Axios** for HTTP requests
+- **Axios** for API calls
 - **React Toastify** for notifications
 
 ### Backend
-
-- **Node.js 16+** & **Express.js 5**
-- **yt-dlp-exec** (YouTube downloader engine)
+- **Node.js** & **Express.js 5**
+- **yt-dlp** (system binary, installed via pip)
+- **ffmpeg** for MP3 conversion and stream merging
 - **CORS** & **express-rate-limit**
 
 ---
 
 ## 📁 Project Structure
 
-```text
-YouTube Video Downloader/
+```
+VidFetch/
 ├── Frontend/
 │   ├── src/
 │   │   ├── features/
-│   │   │   ├── home/ (Pages & SCSS)
-│   │   │   ├── video/ (Components & SCSS)
-│   │   │   └── shared/ (Global styles)
+│   │   │   ├── home/          (page + SCSS)
+│   │   │   └── video/
+│   │   │       ├── components/
+│   │   │       │   └── Video.jsx
+│   │   │       ├── hooks/
+│   │   │       │   └── useVideo.js
+│   │   │       ├── services/
+│   │   │       │   └── video.api.js
+│   │   │       └── utils/
 │   │   ├── App.jsx
 │   │   └── main.jsx
 │   └── package.json
@@ -80,7 +57,12 @@ YouTube Video Downloader/
 ├── Backend/
 │   ├── src/
 │   │   ├── controllers/
-│   │   └── routes/
+│   │   │   └── video.controller.js
+│   │   ├── routes/
+│   │   │   └── video.routes.js
+│   │   └── utils/
+│   │       └── utils.js
+│   ├── public/               ← built frontend (copied from Frontend/dist)
 │   ├── app.js
 │   ├── server.js
 │   └── package.json
@@ -89,321 +71,140 @@ YouTube Video Downloader/
 
 ---
 
-## 🚀 Installation
+## 🚀 Local Setup
 
 ### Prerequisites
 
-- Node.js (v16 or higher)
-- npm or yarn
-- Git
+- Node.js v18+
+- Python + pip (`sudo pacman -S python` on Arch)
+- yt-dlp (`sudo pacman -S yt-dlp` on Arch, or `pip install yt-dlp`)
+- ffmpeg (`sudo pacman -S ffmpeg` on Arch)
 
-### Backend Setup
-
-1. Navigate to the Backend directory:
+### Backend
 
 ```bash
 cd Backend
-```
-
-2. Install dependencies:
-
-```bash
 npm install
-```
-
-3. Create a `.env` file (optional, if needed for configuration):
-
-```bash
-cp .env.example .env
-```
-
-4. Start the development server:
-
-```bash
 npm run dev
 ```
 
-The backend will be running on `http://localhost:3000`
+Runs on `http://localhost:3000`
 
-### Frontend Setup
-
-1. Navigate to the Frontend directory:
+### Frontend
 
 ```bash
 cd Frontend
-```
-
-2. Install dependencies:
-
-```bash
 npm install
-```
-
-3. Start the development server:
-
-```bash
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173`
-
----
-
-## 🎯 Getting Started
-
-1. **Clone the repository** (if applicable)
-2. **Install both Frontend and Backend** using the steps above
-3. **Start the Backend server** first (runs on port 3000)
-4. **Start the Frontend server** (runs on port 5173)
-5. **Open your browser** and navigate to `http://localhost:5173`
-6. **Paste a YouTube URL** and click "Search" to fetch video details
-7. **Select a format/quality** and download the video
+Runs on `http://localhost:5173`. Set `VITE_API_URL=http://localhost:3000` in `Frontend/.env`.
 
 ---
 
 ## 🔌 API Endpoints
 
-### Base URL
+Base URL: `/api/videos`
 
-```
-http://localhost:3000/api/videos
-```
+### `POST /info`
+Fetch video metadata and available formats.
 
-### Endpoints
-
-#### 1. Fetch Video Information
-
-```
-POST /api/videos/info
-```
-
-**Request Body:**
-
+**Request body:**
 ```json
-{
-  "videoUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-}
+{ "url": "https://www.youtube.com/watch?v=..." }
 ```
 
 **Response:**
-
 ```json
 {
   "message": "Video fetched successfully",
   "video": {
     "title": "Video Title",
     "thumbnail": "https://...",
-    "duration": 300,
+    "duration": 212,
     "formats": [
-      {
-        "itag": "18",
-        "label": "360p",
-        "ext": "mp4",
-        "type": "video+audio"
-      },
-      {
-        "itag": "140",
-        "label": "Audio - m4a",
-        "ext": "m4a",
-        "type": "audio-only"
-      }
+      { "itag": "137+140", "label": "1080p MP4", "ext": "mp4", "type": "mp4" },
+      { "itag": "140",     "label": "MP3 Audio", "ext": "mp3", "type": "mp3" }
     ],
-    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    "url": "https://www.youtube.com/watch?v=..."
   }
 }
 ```
 
-#### 2. Download Video
+### `GET /download?url=&itag=&type=`
+Stream download. `type` is `mp4` or `mp3`.
 
-```
-GET /download?url=<VIDEO_URL>&itag=<FORMAT_ITAG>
-```
-
----
-
-## 🎨 Frontend Architecture
-
-### Component Structure
-
-```
-App.jsx (Root Component)
-├── Home (Page)
-│   ├── Input Group
-│   │   ├── URL Input Field
-│   │   └── Search Button
-│   ├── Video Component
-│   │   ├── Thumbnail Image
-│   │   ├── Title
-│   │   ├── Duration Badge
-│   │   └── Download Button
-│   └── Loading Spinner
-```
-
-### Features
-
-- **Custom Hooks**: `useVideo()` manages video state and API calls
-- **Service Layer**: Axios-based API communication
-- **SCSS Modules**: Modular styling with SCSS
-- **Responsive Design**: Mobile-first approach with media queries
-- **Error Boundaries**: Graceful error handling
+### `GET /thumbnail?url=`
+Proxies and downloads the thumbnail image.
 
 ---
 
 ## 🔧 Backend Architecture
 
-### Request Flow
-
 ```
-Client Request
-    ↓
-Express Middleware (CORS, JSON)
-    ↓
-Rate Limiter
-    ↓
-Route Handler
-    ↓
-Video Controller
-    ↓
-yt-dlp-exec (YouTube Downloader)
-    ↓
-Response to Client
-```
+POST /info
+    → yt-dlp --dump-json      (fetch metadata)
+    → filter & rank formats
+    → return MP4 + MP3 options
 
-### Key Components
+GET /download (mp4)
+    → yt-dlp -f <itag> -o -   (stream stdout → response)
 
-- **app.js**: Express configuration and middleware setup
-- **video.routes.js**: API route definitions
-- **video.controller.js**: Business logic for video operations
-- **middlewares**: Rate limiting and request validation
+GET /download (mp3)
+    → yt-dlp -x --audio-format mp3 -o <tmpfile>
+    → res.sendFile → cleanup
 
----
-
-## 📝 Usage Examples
-
-### Example 1: Basic Video Download
-
-1. Open the application in your browser
-2. Paste this URL: `https://www.youtube.com/watch?v=dQw4w9WgXcQ`
-3. Click "Search"
-4. Wait for video information to load
-5. Click "↓ Download" to start the download
-
-### Example 2: Using the API Directly
-
-```javascript
-// Fetch video information
-const response = await axios.post("http://localhost:3000/api/videos/info", {
-  videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-});
-
-console.log(response.data.video);
-// Output: Video title, duration, formats, and thumbnail
+GET /thumbnail
+    → fetch(thumbnailUrl) → proxy to browser
 ```
 
 ---
 
-## 🎯 Performance Optimizations
+## ☁️ Render Deployment
 
-- **Lazy Loading**: Components load on demand
-- **Debounced Requests**: API calls are optimized
-- **Responsive Images**: Optimized thumbnail delivery
-- **Caching**: Smart caching of video metadata
-- **Rate Limiting**: Prevents server overload
-
----
-
-## 🔒 Security Features
-
-- **CORS Configuration**: Restricted to localhost for development
-- **Rate Limiting**: Prevents abuse with express-rate-limit
-- **Input Validation**: URL validation on frontend and backend
-- **Error Handling**: Sensitive information not exposed to clients
-
----
-
-## 📱 Responsive Design
-
-The application is fully responsive with optimized layouts for:
-
-- **Desktop** (1200px+): Full-featured interface with hover effects
-- **Tablet** (768px - 1199px): Adapted layout
-- **Mobile** (< 768px): Touch-optimized simplified interface
-
----
-
-## 🚀 Building for Production
-
-### Frontend Build
-
+### Build command
 ```bash
-cd Frontend
-npm run build
+npm install && cp -r Frontend/dist public && pip install -U yt-dlp
 ```
+> This assumes the frontend is pre-built and committed to `Backend/Frontend/dist/`.
+> To build on Render instead: `npm install && cd ../Frontend && npm install && npm run build && cp -r dist ../Backend/public && cd ../Backend && pip install -U yt-dlp`
 
-This creates a `dist/` folder with optimized production files.
+### Environment variables
+| Key | Value |
+|-----|-------|
+| `NODE_ENV` | `production` |
+| `VITE_API_URL` | `https://your-app.onrender.com` |
 
-### Backend Deployment
-
-Install production dependencies and ensure environment variables are set correctly before deployment.
+### Note on YouTube blocking
+Render (and most cloud providers) use datacenter IPs which YouTube flags as bots. The app uses Chrome user-agent spoofing and the YouTube web player client to mitigate this, but it may still fail on some videos. It works reliably on home/residential IPs.
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Issue: CORS Error
-
-**Solution**: Ensure backend is running on port 3000 and frontend on port 5173
-
-### Issue: Video Not Found
-
-**Solution**: Check if the YouTube URL is valid and publicly accessible
-
-### Issue: Download Fails
-
-**Solution**: Verify yt-dlp is properly installed via dependencies
+| Issue | Fix |
+|-------|-----|
+| `yt-dlp: command not found` | Run `pip install yt-dlp` or `sudo pacman -S yt-dlp` |
+| `ffmpeg not found` | Run `sudo pacman -S ffmpeg` (Arch) or `apt install ffmpeg` |
+| 403 on Render | YouTube is blocking the datacenter IP — works fine locally |
+| MP3 not appearing | Check ffmpeg is installed; yt-dlp needs it for audio conversion |
+| `public/index.html` not found | Ensure build command copies `Frontend/dist` → `Backend/public` |
 
 ---
 
-## 📦 Dependencies Summary
+## 📦 Dependencies
 
-| Package     | Version | Purpose           |
-| ----------- | ------- | ----------------- |
-| React       | 19.2.4  | UI Framework      |
-| Vite        | 8.0.0   | Build Tool        |
-| Axios       | 1.13.6  | HTTP Client       |
-| Express     | 5.2.1   | REST API          |
-| yt-dlp-exec | 1.0.2   | Video Download    |
-| Sass        | 1.98.0  | CSS Preprocessing |
-
----
-
-## 👨‍💻 Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the ISC License - see the LICENSE file for details.
-
----
-
-## 🙌 Acknowledgments
-
-- Built as a learning project for full-stack development
-- YouTube API documentation
-- Vite and React communities
-- Express.js framework
+| Package | Purpose |
+|---------|---------|
+| React 19 | UI framework |
+| Vite | Frontend build tool |
+| Axios | HTTP client |
+| Express 5 | REST API |
+| yt-dlp | YouTube download engine (system binary) |
+| ffmpeg | Audio conversion + stream merging |
+| Sass | CSS preprocessing |
+| express-rate-limit | API abuse protection |
 
 ---
 
 **Made with ❤️ by gc_mayank (Mayank Pun)**
-
-For more information or questions, please open an issue or contact the project maintainer.
