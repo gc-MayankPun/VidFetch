@@ -13,7 +13,7 @@ const app = express();
 app.use(cors({ credentials: true }));
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));   
+app.use(express.static(path.join(__dirname, "..", "public"))); 
 
 // @Routes
 import videoRouter from "./routes/video.routes.js";
@@ -21,7 +21,7 @@ import videoRouter from "./routes/video.routes.js";
 app.use("/api/videos", videoRouter);
 
 app.use("/{*path}", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });
 
 export default app;
