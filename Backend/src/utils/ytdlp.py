@@ -38,8 +38,10 @@ def base_cmd(cookies_path=None, client="web"):
     cmd = [
         YTDLP_BIN,
         "--no-playlist",
+        "--no-warnings",
         "--force-ipv4",
-        "--socket-timeout", "15",      # ← reduced from 30
+        "--sleep-requests", "2",
+        "--socket-timeout", "30",
         "--http-chunk-size", "1048576",
         "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "--extractor-args", f"youtube:player_client={client}",
@@ -51,11 +53,8 @@ def base_cmd(cookies_path=None, client="web"):
     return cmd
 
 
-# -----------------------------
-# Run Command with Retry Logic
-# -----------------------------
-def run_cmd_with_retry(url, base_args, cookies_path=None, retries=2):  # ← reduced from 3
-    clients = ["web", "android"]  # ← only 2 clients instead of 4
+def run_cmd_with_retry(url, base_args, cookies_path=None, retries=3):
+    clients = ["web", "web_safari", "android", "android_creator"]
 
     last_error = None
 
@@ -63,27 +62,27 @@ def run_cmd_with_retry(url, base_args, cookies_path=None, retries=2):  # ← red
         for client in clients:
             try:
                 cmd = base_cmd(cookies_path, client) + base_args + [url]
+
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
                     text=True,
                     env=os.environ.copy(),
-                    timeout=60,  # ← reduced from 300
+                    timeout=300,
                 )
 
                 if result.returncode == 0:
                     return result.stdout.strip()
 
                 last_error = result.stderr.strip()
-                print(f"Failed with client={client}: {last_error[-200:]}", file=sys.stderr)
 
             except subprocess.TimeoutExpired:
-                last_error = "Command timed out"
+                last_error = "Command timed out after 5 minutes"
             except Exception as e:
                 last_error = str(e)
 
         if attempt < retries - 1:
-            wait_time = 3 * (attempt + 1)  # ← reduced from 5s/10s
+            wait_time = 5 * (attempt + 1)
             print(f"Retrying in {wait_time}s...", file=sys.stderr)
             time.sleep(wait_time)
 
