@@ -10,19 +10,22 @@ export const YTDLP_BIN = (() => {
   if (existsSync("/app/yt-dlp")) return "/app/yt-dlp";
   if (existsSync("/usr/bin/yt-dlp")) return "/usr/bin/yt-dlp";
   if (existsSync("/usr/local/bin/yt-dlp")) return "/usr/local/bin/yt-dlp";
-  try { return execSync("which yt-dlp").toString().trim(); }
-  catch { return "yt-dlp"; }
+  try {
+    return execSync("which yt-dlp").toString().trim();
+  } catch {
+    return "yt-dlp";
+  }
 })();
 
-console.log(`[utils] YTDLP_BIN: ${YTDLP_BIN} (exists: ${existsSync(YTDLP_BIN)})`);
+console.log(
+  `[utils] YTDLP_BIN: ${YTDLP_BIN} (exists: ${existsSync(YTDLP_BIN)})`,
+);
 try {
   const head = execSync(`head -1 ${YTDLP_BIN}`).toString().trim();
   console.log(`[utils] yt-dlp first line: ${head}`);
-} catch(e) {
+} catch (e) {
   console.log(`[utils] could not read yt-dlp: ${e.message}`);
 }
-
-
 
 // ── Cookies ───────────────────────────────────────────────────────────────────
 export const COOKIES_PATH = path.resolve(__dirname, "../../../cookies.txt");
@@ -41,17 +44,22 @@ export function baseArgs(client = "web") {
     "--no-playlist",
     "--no-warnings",
     "--force-ipv4",
-    "--sleep-requests", "2",
-    "--socket-timeout", "30",
-    "--http-chunk-size", "1048576",
-    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "--extractor-args", `youtube:player_client=${client}`,
+    "--sleep-requests",
+    "2",
+    "--socket-timeout",
+    "30",
+    "--http-chunk-size",
+    "1048576",
+    "--user-agent",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "--extractor-args",
+    `youtube:player_client=${client}`,
   ];
 
   const proxy = process.env.PROXY_URL;
   if (proxy) args.push("--proxy", proxy);
 
-  if (existsSync(COOKIES_PATH)) args.push("--cookies", COOKIES_PATH);
+  // if (existsSync(COOKIES_PATH)) args.push("--cookies", COOKIES_PATH);
 
   return args;
 }
@@ -101,7 +109,9 @@ export async function runWithRetry(extraArgs, url, retries = 3) {
         return result;
       } catch (err) {
         lastError = err.message;
-        console.error(`[debug] client=${client} error=${lastError.slice(-200)}`);
+        console.error(
+          `[debug] client=${client} error=${lastError.slice(-200)}`,
+        );
       }
     }
 
@@ -136,7 +146,12 @@ export function normalizeYouTubeUrl(url) {
 export function isValidYouTubeUrl(url) {
   try {
     const u = new URL(url);
-    return ["www.youtube.com", "youtube.com", "youtu.be", "m.youtube.com"].includes(u.hostname);
+    return [
+      "www.youtube.com",
+      "youtube.com",
+      "youtu.be",
+      "m.youtube.com",
+    ].includes(u.hostname);
   } catch {
     return false;
   }
