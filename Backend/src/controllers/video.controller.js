@@ -1,25 +1,11 @@
-import { existsSync } from "fs";
 import { spawn } from "child_process";
-// import {
-//   isValidYouTubeUrl,
-//   normalizeYouTubeUrl,
-//   runWithRetry,
-//   YTDLP_BIN,
-//   baseArgs,
-// } from "../utils/utils.js";
-
 import {
   isValidYouTubeUrl,
   normalizeYouTubeUrl,
-  runWithRetry,
   runYtdlp,
   YTDLP_BIN,
-  COOKIES_PATH,
   baseArgs,
 } from "../utils/utils.js";
-
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 // ─── POST /api/videos/info ────────────────────────────────────────────────────
 
@@ -34,7 +20,6 @@ async function videoInfoController(req, res) {
 
   try {
     console.log("[info] about to call runYtdlp");
-    // video.controller.js — replace the hardcoded args in videoInfoController:
     const raw = await runYtdlp([
       ...baseArgs(), // ← baseArgs() guards existsSync(COOKIES_PATH) for you
       "--dump-json",
@@ -47,53 +32,7 @@ async function videoInfoController(req, res) {
     const info = JSON.parse(raw);
     const formats = info.formats || [];
 
-    // Best video-only
-    const videoOnly = formats
-      .filter((f) => f.vcodec !== "none" && f.acodec === "none")
-      .sort((a, b) => (b.height || 0) - (a.height || 0));
-
-    // Best audio-only
-    const audioOnly = formats
-      .filter((f) => f.vcodec === "none" && f.acodec !== "none")
-      .sort((a, b) => (b.abr || 0) - (a.abr || 0));
-
-    // Best combined
-    const combined = formats
-      .filter((f) => f.vcodec !== "none" && f.acodec !== "none")
-      .sort((a, b) => (b.height || 0) - (a.height || 0));
-
-    const bestVideo = videoOnly[0];
-    const bestAudio = audioOnly[0];
-    const bestCombined = combined[0];
-
     const resultFormats = [];
-
-    if (bestVideo && bestAudio) {
-      resultFormats.push({
-        itag: `${bestVideo.format_id}+${bestAudio.format_id}`,
-        label: `${bestVideo.height || "?"}p MP4`,
-        ext: "mp4",
-        type: "mp4",
-      });
-    } else if (bestCombined) {
-      resultFormats.push({
-        itag: bestCombined.format_id,
-        label: bestCombined.format_note || "MP4",
-        ext: "mp4",
-        type: "mp4",
-      });
-    }
-
-    const mp3Itag =
-      bestAudio?.format_id || bestCombined?.format_id || bestVideo?.format_id;
-    if (mp3Itag) {
-      resultFormats.push({
-        itag: mp3Itag,
-        label: "MP3 Audio",
-        ext: "mp3",
-        type: "mp3",
-      });
-    }
 
     const thumbnails = (info.thumbnails || [])
       .filter((t) => t.url)
@@ -101,6 +40,22 @@ async function videoInfoController(req, res) {
         (a, b) =>
           (b.width || 0) * (b.height || 0) - (a.width || 0) * (a.height || 0),
       );
+
+    // Always add MP4 using a safe fallback format string (not hardcoded format_id)
+    resultFormats.push({
+      itag: "bv[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b", // ← format selector string, not an ID
+      label: `${info.height || formats.find((f) => f.vcodec !== "none")?.height || "?"}p MP4`,
+      ext: "mp4",
+      type: "mp4",
+    });
+
+    // Always add MP3
+    resultFormats.push({
+      itag: "ba/b", // best audio, any format
+      label: "MP3 Audio",
+      ext: "mp3",
+      type: "mp3",
+    });
 
     res.status(200).json({
       message: "Video fetched successfully",
@@ -134,19 +89,16 @@ async function videoInfoController(req, res) {
 
 // video.controller.js — replace downloadController body:
 async function downloadController(req, res) {
-  const { url, type } = req.query;
-  if (!url) return res.status(400).json({ message: "url is required" });
-  if (!isValidYouTubeUrl(url)) return res.status(400).json({ message: "Invalid YouTube URL" });
+  const { url, itag, type } = req.query;
+  if (!url || !itag)
+    return res.status(400).json({ message: "url and itag are required" });
+  if (!isValidYouTubeUrl(url))
+    return res.status(400).json({ message: "Invalid YouTube URL" });
 
   const cleanUrl = normalizeYouTubeUrl(url);
   const isAudio = type === "mp3";
-
-  const formatSel = isAudio
-    ? "bestaudio[ext=m4a]/bestaudio"
-    : "best[ext=mp4]/best";
-
   const filename = isAudio ? "audio.m4a" : "video.mp4";
-  const mime     = isAudio ? "audio/mp4"  : "video/mp4";
+  const mime = isAudio ? "audio/mp4" : "video/mp4";
 
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.setHeader("Content-Type", mime);
@@ -154,17 +106,27 @@ async function downloadController(req, res) {
 
   const proc = spawn(YTDLP_BIN, [
     ...baseArgs(),
-    "-f", formatSel,
-    "-o", "-",           // stream to stdout
-    "--socket-timeout", "30",
-    "--http-chunk-size", "1048576",
+    "-f",
+    decodeURIComponent(itag), // ← use the format selector string directly
+    "--merge-output-format",
+    "mp4",
+    "-o",
+    "-",
+    "--socket-timeout",
+    "30",
+    "--http-chunk-size",
+    "1048576",
     cleanUrl,
   ]);
 
   proc.stdout.pipe(res);
-  proc.stderr.on("data", d => console.error("[yt-dlp]", d.toString().trim()));
-  proc.on("error", err => { if (!res.headersSent) res.status(500).json({ message: "Spawn failed" }); });
-  proc.on("close", code => { if (code !== 0 && !res.writableEnded) res.end(); });
+  proc.stderr.on("data", (d) => console.error("[yt-dlp]", d.toString().trim()));
+  proc.on("error", () => {
+    if (!res.headersSent) res.status(500).json({ message: "Spawn failed" });
+  });
+  proc.on("close", (code) => {
+    if (code !== 0 && !res.writableEnded) res.end();
+  });
   res.on("close", () => proc.kill());
 }
 
