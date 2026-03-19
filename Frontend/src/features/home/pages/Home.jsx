@@ -1,11 +1,24 @@
 import { useState } from "react";
 import { useVideo } from "../../video/hooks/useVideo";
 import Video from "../../video/components/Video";
-import { MdLink, MdVideoLibrary, MdAudiotrack, MdImage, MdSpeed } from "react-icons/md";
+import {
+  MdLink,
+  MdVideoLibrary,
+  MdAudiotrack,
+  MdImage,
+  MdSpeed,
+} from "react-icons/md";
 import "../styles/home.scss";
 
 const Home = () => {
-  const { loading, video, fetchInfo, handleDownload, handleThumbnailDownload, clearVideo } = useVideo();
+  const {
+    loading,
+    video,
+    fetchInfo,
+    handleDownload,
+    handleThumbnailDownload,
+    clearVideo,
+  } = useVideo();
   const [link, setLink] = useState("");
 
   const handleSearch = () => {
@@ -23,11 +36,15 @@ const Home = () => {
 
   return (
     <main className="homeContainer">
-
       {/* Nav */}
       <nav className="navbar">
         <div className="logo">
-          <span className="logo-dot" />
+          <img
+            src="/favicon.svg"
+            height={"30rem"}
+            alt="VidFetch"
+            className="logo-img"
+          />
           VidFetch
         </div>
         <span className="nav-badge">Free · No Signup</span>
@@ -37,12 +54,13 @@ const Home = () => {
       <section className="hero">
         <p className="heroEyebrow">YouTube Downloader</p>
         <h1 className="heroTitle">
-          Grab any video.<br />
+          Grab any video.
+          <br />
           <span className="accent-word">Keep it forever.</span>
         </h1>
         <p className="heroSub">
-          Paste a YouTube link and download it as MP4 video or audio.
-          No accounts, no queues, no limits.
+          Paste a YouTube link and download it as MP4 video or audio. No
+          accounts, no queues, no limits.
         </p>
 
         {/* Search */}
@@ -73,7 +91,9 @@ const Home = () => {
               {loading ? "Fetching..." : "Fetch Video"}
             </button>
           </div>
-          <p className="inputHint">Supports youtube.com, youtu.be and Shorts links</p>
+          <p className="inputHint">
+            Supports youtube.com, youtu.be and Shorts links
+          </p>
         </div>
       </section>
 
@@ -142,7 +162,6 @@ const Home = () => {
       <footer className="footer">
         <p>VidFetch — Built for personal use. Respect copyright laws.</p>
       </footer>
-
     </main>
   );
 };
