@@ -348,15 +348,6 @@ async function downloadController(req, res) {
   if (isAudio) {
     const tmpFile = path.join(TMP_DIR, `${randomUUID()}.mp3`);
 
-    let clientGone = false;
-    req.on("close", () => {
-      if (!res.writableEnded) {
-        clientGone = true;
-        proc.kill();
-        fs.unlink(tmpFile, () => {});
-      }
-    });
-
     res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
     res.setHeader("Content-Type", "audio/mpeg");
 
@@ -378,6 +369,17 @@ async function downloadController(req, res) {
     ];
 
     const proc = spawn(YTDLP_BIN, args);
+
+    let clientGone = false;
+    req.on("close", () => {
+      // ← now proc is in scope
+      if (!res.writableEnded) {
+        clientGone = true;
+        proc.kill();
+        fs.unlink(tmpFile, () => {});
+      }
+    });
+
     proc.stderr.on("data", (d) =>
       console.error("[yt-dlp audio]", d.toString().trim()),
     );
