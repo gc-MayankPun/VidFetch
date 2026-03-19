@@ -4,8 +4,8 @@ nixPkgs = ["nodejs_22", "ffmpeg", "curl"]
 [phases.install]
 cmds = [
   "npm install",
-  "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/bin/yt-dlp",
-  "chmod +x /usr/bin/yt-dlp"
+  "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /app/yt-dlp",
+  "chmod +x /app/yt-dlp"
 ]
 
 [start]

@@ -7,6 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ── Binary resolution ─────────────────────────────────────────────────────────
 export const YTDLP_BIN = (() => {
+  if (existsSync("/app/yt-dlp")) return "/app/yt-dlp";
   if (existsSync("/usr/bin/yt-dlp")) return "/usr/bin/yt-dlp";
   if (existsSync("/usr/local/bin/yt-dlp")) return "/usr/local/bin/yt-dlp";
   try { return execSync("which yt-dlp").toString().trim(); }
