@@ -11,6 +11,7 @@ import { spawn } from "child_process";
 import {
   isValidYouTubeUrl,
   normalizeYouTubeUrl,
+  COOKIES_PATH,
   runWithRetry,
   runYtdlp,
   YTDLP_BIN,
@@ -38,6 +39,7 @@ async function videoInfoController(req, res) {
       "--no-playlist",
       "--socket-timeout", "30",
       "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "--cookies", COOKIES_PATH,
       cleanUrl
     ]);
     const info = JSON.parse(raw);
