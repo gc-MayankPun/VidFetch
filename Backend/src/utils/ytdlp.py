@@ -68,7 +68,7 @@ def base_cmd(cookies_path=None, client="web"):
 
 
 def run_cmd_with_retry(url, base_args, cookies_path=None, retries=3):
-    clients = ["web", "web_safari", "android", "android_creator"]
+    clients = ["tv_embedded", "web_embedded", "web", "web_safari"]
 
     last_error = None
 
