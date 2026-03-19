@@ -18,6 +18,7 @@ import {
   normalizeYouTubeUrl,
   YTDLP_BIN,
   baseArgs,
+  runWithRetry,
 } from "../utils/utils.js";
 
 // ─── POST /api/videos/info ────────────────────────────────────────────────────
