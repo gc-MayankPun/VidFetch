@@ -11,9 +11,6 @@ YTDLP_BIN = (
     "/usr/local/bin/yt-dlp" if os.path.exists("/usr/local/bin/yt-dlp") else "yt-dlp"
 )
 
-# Add this:
-print(f"PROXY_URL: {os.environ.get('PROXY_URL', 'NOT SET')}", file=sys.stderr)
-
 # Ensure node is in PATH for yt-dlp n-challenge solving
 _NODE_BIN = "/root/.nix-profile/bin"
 if os.path.isdir(_NODE_BIN):
@@ -47,7 +44,6 @@ def base_cmd(cookies_path=None, client="web"):
     cmd = [
         YTDLP_BIN,
         "--no-playlist",
-        "--no-warnings",
         "--force-ipv4",
         "--sleep-requests", "2",
         "--socket-timeout", "30",
@@ -264,19 +260,27 @@ def cmd_download_mp4(url, output_path, cookies_path=None):
 # RESOLVE DIRECT URL (no download)
 # ─────────────────────────────────
 def cmd_resolve(url, itag, cookies_path=None):
-    raw = run_cmd_with_retry(url, [
-        "--dump-json",
-        "-f", itag,
-    ], cookies_path)
+    raw = None
+    for format_sel in [itag, "bestvideo+bestaudio/best", "best"]:
+        try:
+            raw = run_cmd_with_retry(url, [
+                "--dump-json",
+                "-f", format_sel,
+            ], cookies_path)
+            break
+        except Exception:
+            continue
+
+    if not raw:
+        print(json.dumps({"ok": False, "error": "Could not resolve any format"}))
+        sys.exit(1)
 
     info = json.loads(raw)
-
     formats = info.get("formats", [])
     target = None
 
     for f in formats:
-        fid = f.get("format_id", "")
-        if fid == itag:
+        if f.get("format_id", "") == itag:
             target = f
             break
 
@@ -294,13 +298,13 @@ def cmd_resolve(url, itag, cookies_path=None):
         "ext": ext,
         "title": title,
     }))
-
-
+    
 # ─────────────────────────────────
 # MAIN
 # ─────────────────────────────────
 if __name__ == "__main__":
     print(f"YTDLP_BIN: {YTDLP_BIN} (exists: {os.path.exists(YTDLP_BIN)})", file=sys.stderr)
+    print(f"PROXY_URL: {os.environ.get('PROXY_URL', 'NOT SET')}", file=sys.stderr)
 
     try:
         action = sys.argv[1]
