@@ -53,7 +53,7 @@ export function baseArgs(client = "web") {
   const proxy = process.env.PROXY_URL;
   if (proxy) args.push("--proxy", proxy);
 
-  // if (existsSync(COOKIES_PATH)) args.push("--cookies", COOKIES_PATH);
+  if (existsSync(COOKIES_PATH)) args.push("--cookies", COOKIES_PATH);
 
   return args;
 }
