@@ -24,7 +24,7 @@ async function videoInfoController(req, res) {
       [
         "--dump-json",
         "--no-playlist",
-        "--no-check-formats",  
+        "--no-check-formats",
         "--socket-timeout",
         "30",
       ],
@@ -84,8 +84,9 @@ async function videoInfoController(req, res) {
       });
     }
 
-    console.log(err.stack);
-    res.status(500).json({ message: "Failed to fetch video info" });
+    res
+      .status(500)
+      .json({ message: "Failed to fetch video info", err: { err } });
   }
 }
 
