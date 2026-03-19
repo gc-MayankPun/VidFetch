@@ -1,18 +1,12 @@
 [phases.setup]
-nixPkgs = ["python3", "nodejs_22", "ffmpeg", "curl"]
-
-[phases.build]
-cmds = [
-  "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp",
-  "chmod +x /usr/local/bin/yt-dlp",
-  "ln -sf /root/.nix-profile/bin/node /usr/local/bin/node",
-  "ln -sf /root/.nix-profile/bin/npm /usr/local/bin/npm",
-  "/usr/local/bin/npm install -g @yt-dlp/ejs-bundle || true",
-  "/usr/local/bin/yt-dlp --version"
-]
+nixPkgs = ["nodejs_22", "ffmpeg", "curl"]
 
 [phases.install]
-cmds = ["npm install"]
+cmds = [
+  "npm install",
+  "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp",
+  "chmod +x /usr/local/bin/yt-dlp"
+]
 
 [start]
 cmd = "node server.js"

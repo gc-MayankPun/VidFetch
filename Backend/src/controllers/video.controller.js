@@ -1,204 +1,186 @@
 import { spawn } from "child_process";
 import { existsSync } from "fs";
-import path from "path";
-import { randomUUID } from "crypto";
-import {
-  isValidYouTubeUrl,
-  runPython,
-  normalizeYouTubeUrl,
-  TMP_DIR,
-  COOKIES_PATH,
-  YTDLP_BIN,
-} from "../utils/utils.js";
+import { execSync } from "child_process";
 
-const cookiesArgs = existsSync(COOKIES_PATH) ? ["--cookies", COOKIES_PATH] : [];
-const proxyArgs = process.env.PROXY_URL
-  ? ["--proxy", process.env.PROXY_URL]
-  : [];
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const YTDLP_BIN = (() => {
+  if (existsSync("/usr/local/bin/yt-dlp")) return "/usr/local/bin/yt-dlp";
+  try { return execSync("which yt-dlp").toString().trim(); }
+  catch { return "yt-dlp"; }
+})();
 
-// ─── POST /api/videos/info ────────────────────────────────────────────────────
+const PROXY = process.env.PROXY_URL || "";
+const COOKIES_PATH = process.env.COOKIES_PATH || "";
 
-async function videoInfoController(req, res) {
-  const { url } = req.body;
+function baseArgs(client = "web") {
+  const args = [
+    "--no-playlist",
+    "--force-ipv4",
+    "--socket-timeout", "30",
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "--extractor-args", `youtube:player_client=${client}`,
+  ];
+  if (PROXY) args.push("--proxy", PROXY);
+  if (COOKIES_PATH && existsSync(COOKIES_PATH)) args.push("--cookies", COOKIES_PATH);
+  return args;
+}
 
-  if (!url || !isValidYouTubeUrl(url)) {
-    return res.status(400).json({ message: "Invalid or missing YouTube URL" });
-  }
+function runYtdlp(extraArgs, url) {
+  const clients = ["web", "web_safari", "android", "android_creator"];
 
-  try {
-    const result = await runPython(["info", url]);
+  return new Promise(async (resolve, reject) => {
+    let lastError = "";
 
-    if (!result.ok) {
-      throw new Error(result.error || "Unknown error from python script");
+    for (const client of clients) {
+      const result = await new Promise((res) => {
+        const args = [...baseArgs(client), ...extraArgs, url];
+        const proc = spawn(YTDLP_BIN, args);
+        let stdout = "";
+        let stderr = "";
+        proc.stdout.on("data", (d) => (stdout += d));
+        proc.stderr.on("data", (d) => (stderr += d));
+        proc.on("close", (code) => {
+          if (code === 0) res({ ok: true, stdout });
+          else res({ ok: false, stderr });
+        });
+        proc.on("error", (err) => res({ ok: false, stderr: err.message }));
+      });
+
+      if (result.ok) return resolve(result.stdout.trim());
+      lastError = result.stderr;
+      console.error(`[debug] client=${client} stderr=${lastError.slice(-200)}`);
     }
 
-    res.status(200).json({
+    reject(new Error(lastError || "yt-dlp failed"));
+  });
+}
+
+// ── POST /api/videos/info ────────────────────────────────────────────────────
+export async function videoInfoController(req, res) {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ message: "url is required" });
+
+  try {
+    const raw = await runYtdlp(["--dump-json"], url);
+    const info = JSON.parse(raw);
+    const formats = info.formats || [];
+
+    const videoOnly = formats
+      .filter(f => f.vcodec !== "none" && f.acodec === "none")
+      .sort((a, b) => (b.height || 0) - (a.height || 0));
+
+    const audioOnly = formats
+      .filter(f => f.vcodec === "none" && f.acodec !== "none")
+      .sort((a, b) => (b.abr || 0) - (a.abr || 0));
+
+    const combined = formats
+      .filter(f => f.vcodec !== "none" && f.acodec !== "none")
+      .sort((a, b) => (b.height || 0) - (a.height || 0));
+
+    const bestVideo = videoOnly[0];
+    const bestAudio = audioOnly[0];
+    const bestCombined = combined[0];
+
+    const resultFormats = [];
+
+    if (bestVideo && bestAudio) {
+      resultFormats.push({
+        itag: `${bestVideo.format_id}+${bestAudio.format_id}`,
+        label: `${bestVideo.height || "?"}p MP4`,
+        ext: "mp4",
+        type: "mp4",
+      });
+    } else if (bestCombined) {
+      resultFormats.push({
+        itag: bestCombined.format_id,
+        label: bestCombined.format_note || "MP4",
+        ext: "mp4",
+        type: "mp4",
+      });
+    }
+
+    const mp3Source = bestAudio || bestCombined || bestVideo;
+    if (mp3Source) {
+      resultFormats.push({
+        itag: mp3Source.format_id,
+        label: "MP3 Audio",
+        ext: "mp3",
+        type: "mp3",
+      });
+    }
+
+    const thumbnails = (info.thumbnails || [])
+      .filter(t => t.url)
+      .sort((a, b) => ((b.width || 0) * (b.height || 0)) - ((a.width || 0) * (a.height || 0)));
+
+    res.json({
       message: "Video fetched successfully",
       video: {
-        title: result.title,
-        thumbnail: result.thumbnail,
-        duration: result.duration,
-        formats: result.formats,
+        title: info.title || "",
+        thumbnail: thumbnails[0]?.url || info.thumbnail || "",
+        duration: info.duration || 0,
+        formats: resultFormats,
         url,
       },
     });
   } catch (err) {
     console.error("Video fetch error:", err.message);
-
-    if (
-      err.message.includes("Sign in") ||
-      err.message.includes("bot") ||
-      err.message.includes("429") ||
-      err.message.includes("confirm")
-    ) {
-      return res.status(403).json({
-        message: "YouTube is rate-limiting this server. Try again in a moment.",
-      });
-    }
-
-    res.status(500).json({ message: "Failed to fetch video info" });
+    res.status(500).json({ message: "Failed to fetch video info: " + err.message });
   }
 }
 
-// ─── GET /api/videos/download ─────────────────────────────────────────────────
-
-async function downloadController(req, res) {
+// ── GET /api/videos/download ─────────────────────────────────────────────────
+export async function downloadController(req, res) {
   const { url, itag, type } = req.query;
+  if (!url || !itag) return res.status(400).json({ message: "url and itag are required" });
 
-  if (!url || !itag)
-    return res.status(400).json({ message: "url and itag are required" });
-  if (!isValidYouTubeUrl(url))
-    return res.status(400).json({ message: "Invalid YouTube URL" });
+  const filename = type === "mp3" ? "audio.mp3" : "video.mp4";
+  const contentType = type === "mp3" ? "audio/mpeg" : "video/mp4";
 
-  const cleanUrl = normalizeYouTubeUrl(url);
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Transfer-Encoding", "chunked");
 
-  // ── MP3 ───────────────────────────────────────────────────────────────────
-  if (type === "mp3") {
-    try {
-      res.setHeader("Content-Disposition", `attachment; filename="audio.webm"`);
-      res.setHeader("Content-Type", "audio/webm");
-      res.setHeader("Transfer-Encoding", "chunked");
+  const formatArg = type === "mp3" ? "bestaudio/best" : (itag.includes("+") ? itag : "bestvideo+bestaudio/best");
+  const clients = ["web", "web_safari", "android", "android_creator"];
 
-      const child = spawn("yt-dlp", [
-        "-f",
-        "bestaudio[ext=webm]/bestaudio",
-        "-o",
-        "-",
-        ...cookiesArgs,
-        ...proxyArgs,
-        "--user-agent",
-        USER_AGENT,
-        "--extractor-args",
-        "youtube:player_client=web",
-        "--socket-timeout",
-        "30",
-        "--http-chunk-size",
-        "1048576",
-        cleanUrl,
-      ]);
+  for (const client of clients) {
+    const args = [
+      ...baseArgs(client),
+      "-f", formatArg,
+      ...(type === "mp3" ? ["-x", "--audio-format", "mp3", "--audio-quality", "192K"] : ["--merge-output-format", "mp4"]),
+      "-o", "-",
+      url,
+    ];
 
-      child.stdout.pipe(res);
-      child.stderr.on("data", (data) =>
-        console.error("yt-dlp stderr:", data.toString()),
-      );
-      child.on("error", (err) => {
-        console.error("MP3 streaming error:", err);
-        if (!res.headersSent)
-          res.status(500).json({ message: "MP3 streaming failed" });
-        else res.end();
-      });
-      child.on("exit", (code) => {
-        if (code !== 0 && !res.headersSent)
-          res.status(500).json({ message: "MP3 conversion failed" });
-      });
-    } catch (err) {
-      console.error("MP3 download error:", err.message);
-      if (!res.headersSent)
-        res
-          .status(500)
-          .json({ message: "MP3 download failed: " + err.message });
-    }
-    return;
+    const success = await new Promise((resolve) => {
+      const proc = spawn(YTDLP_BIN, args);
+      proc.stdout.pipe(res, { end: false });
+      proc.stderr.on("data", d => console.error(`[dl] client=${client}`, d.toString().slice(-100)));
+      proc.on("close", code => resolve(code === 0));
+      proc.on("error", () => resolve(false));
+    });
+
+    if (success) { res.end(); return; }
   }
 
-  // ── MP4 ───────────────────────────────────────────────────────────────────
-  if (type === "mp4") {
-    try {
-      res.setHeader("Content-Disposition", `attachment; filename="video.mp4"`);
-      res.setHeader("Content-Type", "video/mp4");
-      res.setHeader("Transfer-Encoding", "chunked");
-
-      const child = spawn("yt-dlp", [
-        "-f",
-        "bestvideo+bestaudio/best",
-        "--merge-output-format",
-        "mp4",
-        "-o",
-        "-",
-        ...cookiesArgs,
-        ...proxyArgs,
-        "--user-agent",
-        USER_AGENT,
-        "--extractor-args",
-        "youtube:player_client=web",
-        "--socket-timeout",
-        "30",
-        "--http-chunk-size",
-        "1048576",
-        cleanUrl,
-      ]);
-
-      child.stdout.pipe(res);
-      child.stderr.on("data", (data) =>
-        console.error("yt-dlp stderr:", data.toString()),
-      );
-      child.on("error", (err) => {
-        console.error("MP4 streaming error:", err);
-        if (!res.headersSent)
-          res.status(500).json({ message: "MP4 streaming failed" });
-        else res.end();
-      });
-      child.on("exit", (code) => {
-        if (code !== 0 && !res.headersSent)
-          res.status(500).json({ message: "MP4 download failed" });
-      });
-    } catch (err) {
-      console.error("MP4 download error:", err.message);
-      if (!res.headersSent)
-        res
-          .status(500)
-          .json({ message: "MP4 download failed: " + err.message });
-    }
-    return;
-  }
-
-  res.status(400).json({ message: "Invalid type — use mp4 or mp3" });
+  if (!res.headersSent) res.status(500).json({ message: "Download failed" });
+  else res.end();
 }
 
-// ─── GET /api/videos/thumbnail ────────────────────────────────────────────────
-
-async function thumbnailController(req, res) {
+// ── GET /api/videos/thumbnail ────────────────────────────────────────────────
+export async function thumbnailController(req, res) {
   const { url } = req.query;
   if (!url) return res.status(400).json({ message: "url is required" });
 
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error("Failed to fetch thumbnail");
-
     const contentType = response.headers.get("content-type") || "image/jpeg";
     const ext = contentType.includes("png") ? "png" : "jpg";
-
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="thumbnail.${ext}"`,
-    );
+    res.setHeader("Content-Disposition", `attachment; filename="thumbnail.${ext}"`);
     res.setHeader("Content-Type", contentType);
-    const buffer = await response.arrayBuffer();
-    res.send(Buffer.from(buffer));
+    res.send(Buffer.from(await response.arrayBuffer()));
   } catch (err) {
-    console.error("Thumbnail proxy error:", err);
     res.status(500).json({ message: "Failed to download thumbnail" });
   }
 }
