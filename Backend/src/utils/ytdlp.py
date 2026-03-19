@@ -7,48 +7,19 @@ import subprocess
 import time
 
 # Use YTDLP_BIN from env if available (set by Node.js)
-YTDLP_BIN = os.environ.get("YTDLP_BIN", "yt-dlp")
+YTDLP_BIN = os.environ.get("YTDLP_BIN", "/usr/local/bin/yt-dlp")
 
-import subprocess as _sp
-_node_check = _sp.run(["which", "node"], capture_output=True, text=True)
-print(f"node path: {_node_check.stdout.strip()}", file=sys.stderr)
-_node_version = _sp.run(["node", "--version"], capture_output=True, text=True)
-print(f"node version: {_node_version.stdout.strip()}", file=sys.stderr)
-
-# -----------------------------
-# Ensure Node is available
-# -----------------------------
-_node = (
-    shutil.which("node") or
-    "/opt/render/project/nodes/node-22.22.0/bin/node"
-)
-if _node and os.path.exists(_node):
-    _node_dir = os.path.dirname(_node)
-    os.environ["PATH"] = f"{_node_dir}:{os.environ.get('PATH', '')}"
+# Ensure node is in PATH and set NODE env var
+NODE_BIN = "/root/.nix-profile/bin/node"
+if os.path.exists(NODE_BIN):
+    os.environ["NODE"] = NODE_BIN
+    os.environ["PATH"] = f"/root/.nix-profile/bin:/usr/local/bin:{os.environ.get('PATH', '')}"
 
 
 # -----------------------------
 # Base Command Builder
 # -----------------------------
 def base_cmd(cookies_path=None, client="web"):
-    for p in [
-        os.path.expanduser("~/.deno/bin"),
-        "/opt/render/project/nodes/node-22.22.0/bin",
-        "/usr/bin",
-        "/usr/local/bin",
-        "/app",
-        "/root/.nix-profile/bin",
-    ]:
-        if os.path.isdir(p) and p not in os.environ.get("PATH", ""):
-            os.environ["PATH"] = f"{p}:{os.environ['PATH']}"
-
-    node_bin = shutil.which("node") or "/root/.nix-profile/bin/node"
-    
-    if node_bin and os.path.exists(node_bin):
-        os.environ["NODE"] = node_bin
-
-    extractor_args = f"youtube:player_client={client}"
-
     cmd = [
         YTDLP_BIN,
         "--no-playlist",
@@ -57,8 +28,7 @@ def base_cmd(cookies_path=None, client="web"):
         "--socket-timeout", "30",
         "--http-chunk-size", "1048576",
         "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "--extractor-args", extractor_args,
-        "--compat-options", "no-youtube-unavailable-videos",
+        "--extractor-args", f"youtube:player_client={client}",
     ]
 
     if cookies_path and os.path.exists(cookies_path):
@@ -67,8 +37,11 @@ def base_cmd(cookies_path=None, client="web"):
     return cmd
 
 
+# -----------------------------
+# Run Command with Retry Logic
+# -----------------------------
 def run_cmd_with_retry(url, base_args, cookies_path=None, retries=3):
-    clients = ["tv_embedded", "web_embedded", "web", "web_safari"]
+    clients = ["web", "web_safari", "android", "android_creator"]
 
     last_error = None
 
