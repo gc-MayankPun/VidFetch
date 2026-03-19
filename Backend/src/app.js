@@ -10,7 +10,10 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-app.use(cors({ credentials: true }));
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "*",
+  credentials: true
+}));
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public"))); 
@@ -19,6 +22,16 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 import videoRouter from "./routes/video.routes.js";
 
 app.use("/api/videos", videoRouter);
+
+app.get("/test-ytdlp", async (req, res) => {
+  const { execSync } = await import("child_process");
+  try {
+    const version = execSync("/usr/local/bin/yt-dlp --version").toString().trim();
+    res.json({ version });
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
 
 app.use("/{*path}", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
