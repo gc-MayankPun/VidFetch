@@ -8,7 +8,8 @@ import {
   baseArgs,
 } from "../utils/utils.js";
 
-const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 // ─── POST /api/videos/info ────────────────────────────────────────────────────
 
@@ -63,14 +64,23 @@ async function videoInfoController(req, res) {
       });
     }
 
-    const mp3Itag = bestAudio?.format_id || bestCombined?.format_id || bestVideo?.format_id;
+    const mp3Itag =
+      bestAudio?.format_id || bestCombined?.format_id || bestVideo?.format_id;
     if (mp3Itag) {
-      resultFormats.push({ itag: mp3Itag, label: "MP3 Audio", ext: "mp3", type: "mp3" });
+      resultFormats.push({
+        itag: mp3Itag,
+        label: "MP3 Audio",
+        ext: "mp3",
+        type: "mp3",
+      });
     }
 
     const thumbnails = (info.thumbnails || [])
       .filter((t) => t.url)
-      .sort((a, b) => (b.width || 0) * (b.height || 0) - (a.width || 0) * (a.height || 0));
+      .sort(
+        (a, b) =>
+          (b.width || 0) * (b.height || 0) - (a.width || 0) * (a.height || 0),
+      );
 
     res.status(200).json({
       message: "Video fetched successfully",
@@ -85,9 +95,18 @@ async function videoInfoController(req, res) {
   } catch (err) {
     console.error("Video fetch error:", err.message);
 
-    if (err.message.includes("Sign in") || err.message.includes("bot") ||
-        err.message.includes("429") || err.message.includes("confirm")) {
-      return res.status(403).json({ message: "YouTube is rate-limiting this server. Try again in a moment." });
+    if (
+      err.message.includes("Sign in") ||
+      err.message.includes("bot") ||
+      err.message.includes("429") ||
+      err.message.includes("confirm")
+    ) {
+      return res
+        .status(403)
+        .json({
+          message:
+            "YouTube is rate-limiting this server. Try again in a moment.",
+        });
     }
 
     res.status(500).json({ message: "Failed to fetch video info" });
@@ -99,8 +118,10 @@ async function videoInfoController(req, res) {
 async function downloadController(req, res) {
   const { url, itag, type } = req.query;
 
-  if (!url || !itag) return res.status(400).json({ message: "url and itag are required" });
-  if (!isValidYouTubeUrl(url)) return res.status(400).json({ message: "Invalid YouTube URL" });
+  if (!url || !itag)
+    return res.status(400).json({ message: "url and itag are required" });
+  if (!isValidYouTubeUrl(url))
+    return res.status(400).json({ message: "Invalid YouTube URL" });
 
   const cleanUrl = normalizeYouTubeUrl(url);
   const proxy = process.env.PROXY_URL;
@@ -114,22 +135,30 @@ async function downloadController(req, res) {
       res.setHeader("Transfer-Encoding", "chunked");
 
       const child = spawn(YTDLP_BIN, [
-        "-f", "bestaudio[ext=webm]/bestaudio",
-        "-o", "-",
-        "--user-agent", USER_AGENT,
-        "--extractor-args", "youtube:player_client=web",
-        "--socket-timeout", "30",
-        "--http-chunk-size", "1048576",
+        "-f",
+        "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio",
+        "-o",
+        "-",
+        "--user-agent",
+        USER_AGENT,
+        "--extractor-args",
+        "youtube:player_client=web",
+        "--socket-timeout",
+        "30",
+        "--http-chunk-size",
+        "1048576",
         ...proxyArgs,
-        ...(existsSync(process.env.COOKIES_PATH || "") ? ["--cookies", process.env.COOKIES_PATH] : []),
         cleanUrl,
       ]);
 
       child.stdout.pipe(res);
-      child.stderr.on("data", (d) => console.error("yt-dlp stderr:", d.toString()));
+      child.stderr.on("data", (d) =>
+        console.error("yt-dlp stderr:", d.toString()),
+      );
       child.on("error", (err) => {
         console.error("MP3 streaming error:", err);
-        if (!res.headersSent) res.status(500).json({ message: "MP3 streaming failed" });
+        if (!res.headersSent)
+          res.status(500).json({ message: "MP3 streaming failed" });
         else res.end();
       });
       child.on("exit", (code) => {
@@ -138,7 +167,10 @@ async function downloadController(req, res) {
       });
     } catch (err) {
       console.error("MP3 download error:", err.message);
-      if (!res.headersSent) res.status(500).json({ message: "MP3 download failed: " + err.message });
+      if (!res.headersSent)
+        res
+          .status(500)
+          .json({ message: "MP3 download failed: " + err.message });
     }
     return;
   }
@@ -151,8 +183,7 @@ async function downloadController(req, res) {
       res.setHeader("Transfer-Encoding", "chunked");
 
       const child = spawn(YTDLP_BIN, [
-        "-f", "bestvideo+bestaudio/best",
-        "--merge-output-format", "mp4",
+        "-f", "best[ext=mp4]/best",
         "-o", "-",
         "--user-agent", USER_AGENT,
         "--extractor-args", "youtube:player_client=web",
@@ -160,13 +191,16 @@ async function downloadController(req, res) {
         "--http-chunk-size", "1048576",
         ...proxyArgs,
         cleanUrl,
-      ]);
+      1]);
 
       child.stdout.pipe(res);
-      child.stderr.on("data", (d) => console.error("yt-dlp stderr:", d.toString()));
+      child.stderr.on("data", (d) =>
+        console.error("yt-dlp stderr:", d.toString()),
+      );
       child.on("error", (err) => {
         console.error("MP4 streaming error:", err);
-        if (!res.headersSent) res.status(500).json({ message: "MP4 streaming failed" });
+        if (!res.headersSent)
+          res.status(500).json({ message: "MP4 streaming failed" });
         else res.end();
       });
       child.on("exit", (code) => {
@@ -175,7 +209,10 @@ async function downloadController(req, res) {
       });
     } catch (err) {
       console.error("MP4 download error:", err.message);
-      if (!res.headersSent) res.status(500).json({ message: "MP4 download failed: " + err.message });
+      if (!res.headersSent)
+        res
+          .status(500)
+          .json({ message: "MP4 download failed: " + err.message });
     }
     return;
   }
@@ -196,7 +233,10 @@ async function thumbnailController(req, res) {
     const contentType = response.headers.get("content-type") || "image/jpeg";
     const ext = contentType.includes("png") ? "png" : "jpg";
 
-    res.setHeader("Content-Disposition", `attachment; filename="thumbnail.${ext}"`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="thumbnail.${ext}"`,
+    );
     res.setHeader("Content-Type", contentType);
     const buffer = await response.arrayBuffer();
     res.send(Buffer.from(buffer));
