@@ -2,7 +2,6 @@ import { spawn } from "child_process";
 import {
   isValidYouTubeUrl,
   normalizeYouTubeUrl,
-  // runYtdlp,
   runWithRetry,
   YTDLP_BIN,
   baseArgs,
@@ -21,18 +20,14 @@ async function videoInfoController(req, res) {
 
   try {
     console.log("[info] about to call runYtdlp");
-    // const raw = await runYtdlp([
-    //   ...baseArgs(), // ← baseArgs() guards existsSync(COOKIES_PATH) for you
-    //   "--dump-json",
-    //   "--no-playlist",
-    //   "--skip-download", // ← add this
-    //   "--ignore-errors",
-    //   "--socket-timeout",
-    //   "30",
-    //   cleanUrl,
-    // ]);
     const raw = await runWithRetry(
-      ["--dump-json", "--no-playlist", "--socket-timeout", "30"],
+      [
+        "--dump-json",
+        "--no-playlist",
+        "--no-check-formats",  
+        "--socket-timeout",
+        "30",
+      ],
       cleanUrl,
       3, // retry across all 3 clients, up to 3 attempts
     );
@@ -89,6 +84,7 @@ async function videoInfoController(req, res) {
       });
     }
 
+    console.log(err.stack);
     res.status(500).json({ message: "Failed to fetch video info" });
   }
 }

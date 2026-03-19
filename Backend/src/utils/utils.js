@@ -8,12 +8,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ── Binary resolution ─────────────────────────────────────────────────────────
 export const YTDLP_BIN = (() => {
   const candidates = [
-    "/usr/local/bin/yt-dlp",   // ← where your Dockerfile puts it, check FIRST
+    "/usr/local/bin/yt-dlp", // ← where your Dockerfile puts it, check FIRST
     "/usr/bin/yt-dlp",
     "/app/yt-dlp",
   ];
   for (const p of candidates) if (existsSync(p)) return p;
-  try { return execSync("which yt-dlp").toString().trim(); } catch { return "yt-dlp"; }
+  try {
+    return execSync("which yt-dlp").toString().trim();
+  } catch {
+    return "yt-dlp";
+  }
 })();
 
 console.log(
@@ -26,7 +30,7 @@ try {
   console.log(`[utils] could not read yt-dlp: ${e.message}`);
 }
 
-// ── Cookies ─────────────────────────────────────────────────────────────────── 
+// ── Cookies ───────────────────────────────────────────────────────────────────
 export const COOKIES_PATH = path.resolve(process.cwd(), "cookies.txt");
 if (process.env.YOUTUBE_COOKIES) {
   writeFileSync(COOKIES_PATH, process.env.YOUTUBE_COOKIES, "utf-8");
@@ -58,7 +62,9 @@ export function baseArgs(client = "web") {
 }
 
 // ── Run yt-dlp and collect stdout ─────────────────────────────────────────────
-export function runYtdlp(args, timeoutMs = 30000) {
+const CLIENTS = ["web", "ios", "android", "mweb"];
+
+export function runYtdlp(args, timeoutMs = 60000) {
   return new Promise((resolve, reject) => {
     console.log(`[yt-dlp] spawning with args: ${args.slice(-3).join(" ")}`);
     const proc = spawn(YTDLP_BIN, args);
@@ -88,9 +94,6 @@ export function runYtdlp(args, timeoutMs = 30000) {
     });
   });
 }
-
-// ── Run with client rotation + retries ───────────────────────────────────────
-const CLIENTS = ["web", "android", "ios"];
 
 export async function runWithRetry(extraArgs, url, retries = 1) {
   let lastError;
