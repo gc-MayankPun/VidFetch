@@ -11,10 +11,10 @@ import { spawn } from "child_process";
 import {
   isValidYouTubeUrl,
   normalizeYouTubeUrl,
-  COOKIES_PATH,
   runWithRetry,
   runYtdlp,
   YTDLP_BIN,
+  COOKIES_PATH,
   baseArgs,
 } from "../utils/utils.js";
 
@@ -33,15 +33,19 @@ async function videoInfoController(req, res) {
   const cleanUrl = normalizeYouTubeUrl(url);
 
   try {
-    // const raw = await runWithRetry(["--dump-json"], cleanUrl);
+    console.log("[info] about to call runYtdlp");
     const raw = await runYtdlp([
       "--dump-json",
       "--no-playlist",
-      "--socket-timeout", "30",
-      "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      "--cookies", COOKIES_PATH,
-      cleanUrl
+      "--socket-timeout",
+      "30",
+      "--user-agent",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "--cookies",
+      COOKIES_PATH,
+      cleanUrl,
     ]);
+    console.log("[info] runYtdlp returned");
     const info = JSON.parse(raw);
     const formats = info.formats || [];
 
@@ -119,12 +123,9 @@ async function videoInfoController(req, res) {
       err.message.includes("429") ||
       err.message.includes("confirm")
     ) {
-      return res
-        .status(403)
-        .json({
-          message:
-            "YouTube is rate-limiting this server. Try again in a moment.",
-        });
+      return res.status(403).json({
+        message: "YouTube is rate-limiting this server. Try again in a moment.",
+      });
     }
 
     res.status(500).json({ message: "Failed to fetch video info" });
@@ -241,8 +242,10 @@ async function videoInfoController(req, res) {
 async function downloadController(req, res) {
   const { url, itag, type } = req.query;
 
-  if (!url || !itag) return res.status(400).json({ message: "url and itag are required" });
-  if (!isValidYouTubeUrl(url)) return res.status(400).json({ message: "Invalid YouTube URL" });
+  if (!url || !itag)
+    return res.status(400).json({ message: "url and itag are required" });
+  if (!isValidYouTubeUrl(url))
+    return res.status(400).json({ message: "Invalid YouTube URL" });
 
   const cleanUrl = normalizeYouTubeUrl(url);
 
@@ -252,7 +255,8 @@ async function downloadController(req, res) {
     const info = JSON.parse(raw);
     const directUrl = info.url || info.formats?.[info.formats.length - 1]?.url;
 
-    if (!directUrl) return res.status(500).json({ message: "Could not resolve direct URL" });
+    if (!directUrl)
+      return res.status(500).json({ message: "Could not resolve direct URL" });
 
     res.redirect(directUrl);
   } catch (err) {
