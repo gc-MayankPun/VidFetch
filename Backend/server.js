@@ -2,7 +2,7 @@ import app from "./src/app.js";
 import { execSync } from "child_process";
 
 try {
-  const head = execSync("head -1 /usr/local/bin/yt-dlp").toString().trim();
+  const head = execSync("head -1 /usr/bin/yt-dlp").toString().trim();
   console.log("yt-dlp first line:", head);
 } catch (e) {
   console.log("could not inspect yt-dlp:", e.message);
