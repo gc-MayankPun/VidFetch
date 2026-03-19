@@ -19,6 +19,7 @@ import {
   YTDLP_BIN,
   baseArgs,
   runWithRetry,
+  TMP_DIR,
 } from "../utils/utils.js";
 
 // ─── POST /api/videos/info ────────────────────────────────────────────────────
@@ -116,7 +117,8 @@ async function downloadController(req, res) {
   const isAudio = type === "mp3";
 
   if (isAudio) {
-    const tmpFile = path.join("/tmp", `${randomUUID()}.mp3`);
+    // const tmpFile = path.join("/tmp", `${randomUUID()}.mp3`);
+    const tmpFile = path.join(TMP_DIR, `${randomUUID()}.mp3`);
 
     const args = [
       ...baseArgs(),
@@ -218,7 +220,7 @@ async function downloadController(req, res) {
 //   const isAudio = type === "mp3";
 
 //   if (isAudio) {
-//     const tmpFile = path.join("/tmp", `${randomUUID()}.mp3`);
+//     const tmpFile = path.join(TMP_DIR, `${randomUUID()}.mp3`);
 
 //     res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
 //     res.setHeader("Content-Type", "audio/mpeg");
