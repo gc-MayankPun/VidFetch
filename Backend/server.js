@@ -1,11 +1,19 @@
 import app from "./src/app.js";
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
 
+// Verify yt-dlp binary at startup
 try {
-  const head = execSync("head -1 /app/yt-dlp").toString().trim(); 
-  console.log("yt-dlp first line:", head);
+  const version = execSync("/usr/local/bin/yt-dlp --version").toString().trim();
+  console.log("[yt-dlp] version:", version);
 } catch (e) {
-  console.log("could not inspect yt-dlp:", e.message);
+  console.error("[yt-dlp] binary check failed:", e.message);
 }
 
-app.listen(3000, () => console.log("Server listening on PORT 3000"));
+app.listen(3000, () => {
+  console.log("Server listening on PORT 3000");
+
+  // Warm up yt-dlp
+  const probe = spawn("/usr/local/bin/yt-dlp", ["--version"]);
+  probe.stdout.on("data", d => console.log("[yt-dlp warmup]", d.toString().trim()));
+  probe.on("close", code => console.log(`[yt-dlp warmup] exited ${code}`));
+});

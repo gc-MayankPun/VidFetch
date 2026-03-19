@@ -7,14 +7,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ── Binary resolution ─────────────────────────────────────────────────────────
 export const YTDLP_BIN = (() => {
-  if (existsSync("/app/yt-dlp")) return "/app/yt-dlp";
-  if (existsSync("/usr/bin/yt-dlp")) return "/usr/bin/yt-dlp";
-  if (existsSync("/usr/local/bin/yt-dlp")) return "/usr/local/bin/yt-dlp";
-  try {
-    return execSync("which yt-dlp").toString().trim();
-  } catch {
-    return "yt-dlp";
-  }
+  const candidates = [
+    "/usr/local/bin/yt-dlp",   // ← where your Dockerfile puts it, check FIRST
+    "/usr/bin/yt-dlp",
+    "/app/yt-dlp",
+  ];
+  for (const p of candidates) if (existsSync(p)) return p;
+  try { return execSync("which yt-dlp").toString().trim(); } catch { return "yt-dlp"; }
 })();
 
 console.log(
@@ -27,8 +26,8 @@ try {
   console.log(`[utils] could not read yt-dlp: ${e.message}`);
 }
 
-// ── Cookies ───────────────────────────────────────────────────────────────────
-export const COOKIES_PATH = path.resolve(__dirname, "../../../cookies.txt");
+// ── Cookies ─────────────────────────────────────────────────────────────────── 
+export const COOKIES_PATH = path.resolve(process.cwd(), "cookies.txt");
 if (process.env.YOUTUBE_COOKIES) {
   writeFileSync(COOKIES_PATH, process.env.YOUTUBE_COOKIES, "utf-8");
   console.log("[utils] cookies.txt written from env var");
@@ -91,7 +90,9 @@ export function runYtdlp(args, timeoutMs = 30000) {
 }
 
 // ── Run with client rotation + retries ───────────────────────────────────────
-const CLIENTS = ["web", "web_safari", "android", "android_creator"];
+// const CLIENTS = ["web", "web_safari", "android", "android_creator"];
+// // utils.js
+const CLIENTS = ["web", "android", "ios"]; // these three actually work
 
 export async function runWithRetry(extraArgs, url, retries = 1) {
   let lastError;
