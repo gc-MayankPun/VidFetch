@@ -18,22 +18,28 @@ export async function fetchVideoInfo({ videoUrl }) {
   }
 }
 
-export async function downloadFormat({ videoUrl, itag, type }) {
+// export async function downloadFormat({ videoUrl, itag, type }) {
+//   const base = import.meta.env.VITE_API_URL;
+//   const params = new URLSearchParams({ url: videoUrl, itag, type });
+
+//   try {
+//     // Both MP4 and MP3 stream directly from backend
+//     // This avoids CORS issues and lets the server handle everything
+//     const a = document.createElement("a");
+//     a.href = `${base}/api/videos/download?${params}`;
+//     a.style.display = "none";
+//     document.body.appendChild(a);
+//     a.click();
+//     document.body.removeChild(a);
+//   } catch (err) {
+//     throw err.response?.data || { message: "Failed to download file" };
+//   }
+// }
+
+export function downloadFormat({ videoUrl, itag, type }) {
   const base = import.meta.env.VITE_API_URL;
   const params = new URLSearchParams({ url: videoUrl, itag, type });
-
-  try {
-    // Both MP4 and MP3 stream directly from backend
-    // This avoids CORS issues and lets the server handle everything
-    const a = document.createElement("a");
-    a.href = `${base}/api/videos/download?${params}`;
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  } catch (err) {
-    throw err.response?.data || { message: "Failed to download file" };
-  }
+  window.open(`${base}/api/videos/download?${params}`, "_blank");
 }
 
 export function downloadThumbnail({ thumbnailUrl }) {
