@@ -348,48 +348,65 @@ async function downloadController(req, res) {
   if (isAudio) {
     const tmpFile = path.join(TMP_DIR, `${randomUUID()}.mp3`);
 
+    let clientGone = false;
+    req.on("close", () => {
+      if (!res.writableEnded) {
+        clientGone = true;
+        proc.kill();
+        fs.unlink(tmpFile, () => {});
+      }
+    });
+
     res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
     res.setHeader("Content-Type", "audio/mpeg");
 
     const args = [
       ...baseArgs(),
-      "-f", "bestaudio",
+      "-f",
+      "bestaudio/best",
       "-x",
-      "--audio-format", "mp3",
-      "--audio-quality", "0",
-      "--socket-timeout", "30",
+      "--audio-format",
+      "mp3",
+      "--audio-quality",
+      "0",
+      "--socket-timeout",
+      "30",
       "--no-playlist",
-      "-o", tmpFile,
+      "-o",
+      tmpFile,
       cleanUrl,
     ];
 
     const proc = spawn(YTDLP_BIN, args);
-    proc.stderr.on("data", (d) => console.error("[yt-dlp]", d.toString().trim()));
-
-    res.on("close", () => {
-      proc.kill();
-      fs.unlink(tmpFile, () => {});
-    });
+    proc.stderr.on("data", (d) =>
+      console.error("[yt-dlp audio]", d.toString().trim()),
+    );
 
     proc.on("error", () => {
       if (!res.headersSent) res.status(500).json({ message: "Spawn failed" });
     });
 
     proc.on("close", (code) => {
+      if (clientGone) return;
       if (code !== 0) {
         if (!res.headersSent)
           res.status(500).json({ message: "yt-dlp conversion failed" });
         return;
       }
 
-      const stream = fs.createReadStream(tmpFile);
-      stream.pipe(res);
-      stream.on("error", () => {
-        if (!res.headersSent)
-          res.status(500).json({ message: "Failed to stream audio file" });
-      });
-      stream.on("close", () => {
-        fs.unlink(tmpFile, () => {});
+      fs.stat(tmpFile, (err, stat) => {
+        if (err || stat.size === 0) {
+          if (!res.headersSent)
+            res.status(500).json({ message: "Audio file empty or missing" });
+          return;
+        }
+        res.setHeader("Content-Length", stat.size);
+        const stream = fs.createReadStream(tmpFile);
+        stream.pipe(res);
+        stream.on("close", () => fs.unlink(tmpFile, () => {}));
+        stream.on("error", () => {
+          fs.unlink(tmpFile, () => {});
+        });
       });
     });
 
@@ -397,20 +414,22 @@ async function downloadController(req, res) {
   }
 
   // ── Video path ──────────────────────────────────────────────────────────
-  // res.setHeader("Content-Disposition", `attachment; filename="video.mp4"`);
-  // res.setHeader("Content-Type", "video/mp4");
-  
   res.setHeader("Content-Disposition", `attachment; filename="video.mp4"`);
   res.setHeader("Content-Type", "video/mp4");
   res.setHeader("Transfer-Encoding", "chunked");
 
   const args = [
     ...baseArgs(),
-    "-o", "-",
-    "--socket-timeout", "30",
-    "--http-chunk-size", "1048576",
-    "-f", decodeURIComponent(itag),
-    "--merge-output-format", "mp4",
+    "-o",
+    "-",
+    "--socket-timeout",
+    "30",
+    "--http-chunk-size",
+    "1048576",
+    "-f",
+    decodeURIComponent(itag),
+    "--merge-output-format",
+    "mp4",
     cleanUrl,
   ];
 
@@ -423,7 +442,9 @@ async function downloadController(req, res) {
   proc.on("close", (code) => {
     if (code !== 0 && !res.writableEnded) res.end();
   });
-  res.on("close", () => proc.kill());
+  req.on("close", () => {
+    if (!res.writableEnded) proc.kill();
+  });
 }
 
 // ─── GET /api/videos/thumbnail ────────────────────────────────────────────────
