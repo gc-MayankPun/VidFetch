@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import time
 
+YTDLP_BIN = os.environ.get("YTDLP_BIN", "/usr/local/bin/yt-dlp")
+
 # -----------------------------
 # Ensure Node is available
 # -----------------------------
@@ -32,7 +34,7 @@ def base_cmd(cookies_path=None, client="web"):
             os.environ["PATH"] = f"{p}:{os.environ['PATH']}"
 
     cmd = [
-        "yt-dlp",
+        YTDLP_BIN,
         "--no-playlist",
         "--no-warnings",
         "--force-ipv4",
