@@ -119,69 +119,78 @@ async function downloadController(req, res) {
   if (isAudio) {
     const tmpFile = path.join(TMP_DIR, `${randomUUID()}.mp3`);
 
-    const args = [
-      ...baseArgs("ios"),
-      "-f", "bestaudio/best",  // ← CHANGED: was "bestaudio", now fallbacks to best combined if no audio-only stream
-      "-x",
-      "--audio-format", "mp3",
-      "--audio-quality", "0",
-      "--socket-timeout", "30",
-      "--no-playlist",
-      "-o", tmpFile,
-      cleanUrl,
-    ];
-
-    const proc = spawn(YTDLP_BIN, args);
-
-    let stderrLog = "";  // ← CHANGED: collect stderr for better error reporting
-    proc.stderr.on("data", (d) => {
-      const line = d.toString().trim();
-      stderrLog += line + "\n";
-      console.error("[yt-dlp audio]", line);
-    });
-
     let clientGone = false;
     req.on("close", () => {
-      if (!res.writableEnded) {
-        clientGone = true;
-        proc.kill();
-        fs.unlink(tmpFile, () => {});
-      }
+      clientGone = true;
+      fs.unlink(tmpFile, () => {});
     });
 
-    proc.on("error", () => {
-      if (!res.headersSent) res.status(500).json({ message: "Spawn failed" });
-    });
+    const clients = ["web", "android", "ios", "mweb"];
+    let success = false;
 
-    proc.on("close", (code) => {
+    for (const client of clients) {
       if (clientGone) return;
 
-      if (code !== 0) {
-        console.error("[yt-dlp audio] FAILED, full stderr:\n", stderrLog);  // ← CHANGED: log full stderr on failure
+      const args = [
+        ...baseArgs(client),
+        "-f",
+        "bestaudio/best",
+        "-x",
+        "--audio-format",
+        "mp3",
+        "--audio-quality",
+        "0",
+        "--socket-timeout",
+        "30",
+        "--no-playlist",
+        "-o",
+        tmpFile,
+        cleanUrl,
+      ];
+
+      const code = await new Promise((resolve) => {
+        const proc = spawn(YTDLP_BIN, args);
+        proc.stderr.on("data", (d) =>
+          console.error(`[yt-dlp audio:${client}]`, d.toString().trim()),
+        );
+        proc.on("error", () => resolve(1));
+        proc.on("close", resolve);
+        req.on("close", () => proc.kill());
+      });
+
+      if (code === 0) {
+        success = true;
+        break;
+      }
+      console.error(`[yt-dlp audio] client=${client} failed, trying next...`);
+    }
+
+    if (!success) {
+      if (!res.headersSent)
+        res
+          .status(500)
+          .json({ message: "Audio download failed on all clients" });
+      return;
+    }
+
+    fs.stat(tmpFile, (err, stat) => {
+      if (err || stat.size === 0) {
         if (!res.headersSent)
-          res.status(500).json({ message: "yt-dlp conversion failed", detail: stderrLog });  // ← CHANGED: include detail in response
+          res.status(500).json({ message: "Audio file empty or missing" });
         return;
       }
 
-      fs.stat(tmpFile, (err, stat) => {
-        if (err || stat.size === 0) {
-          if (!res.headersSent)
-            res.status(500).json({ message: "Audio file empty or missing" });
-          return;
-        }
+      res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Content-Length", stat.size);
 
-        res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
-        res.setHeader("Content-Type", "audio/mpeg");
-        res.setHeader("Content-Length", stat.size);
-
-        const stream = fs.createReadStream(tmpFile);
-        stream.pipe(res);
-        stream.on("close", () => fs.unlink(tmpFile, () => {}));
-        stream.on("error", () => {
-          if (!res.headersSent)
-            res.status(500).json({ message: "Failed to stream audio" });
-          fs.unlink(tmpFile, () => {});
-        });
+      const stream = fs.createReadStream(tmpFile);
+      stream.pipe(res);
+      stream.on("close", () => fs.unlink(tmpFile, () => {}));
+      stream.on("error", () => {
+        if (!res.headersSent)
+          res.status(500).json({ message: "Failed to stream audio" });
+        fs.unlink(tmpFile, () => {});
       });
     });
 
@@ -195,11 +204,16 @@ async function downloadController(req, res) {
 
   const args = [
     ...baseArgs("ios"),
-    "-o", "-",
-    "--socket-timeout", "30",
-    "--http-chunk-size", "1048576",
-    "-f", decodeURIComponent(itag),
-    "--merge-output-format", "mp4",
+    "-o",
+    "-",
+    "--socket-timeout",
+    "30",
+    "--http-chunk-size",
+    "1048576",
+    "-f",
+    decodeURIComponent(itag),
+    "--merge-output-format",
+    "mp4",
     cleanUrl,
   ];
 
