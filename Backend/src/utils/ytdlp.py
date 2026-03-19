@@ -11,6 +11,9 @@ YTDLP_BIN = (
     "/usr/local/bin/yt-dlp" if os.path.exists("/usr/local/bin/yt-dlp") else "yt-dlp"
 )
 
+# Add this:
+print(f"PROXY_URL: {os.environ.get('PROXY_URL', 'NOT SET')}", file=sys.stderr)
+
 # Ensure node is in PATH for yt-dlp n-challenge solving
 _NODE_BIN = "/root/.nix-profile/bin"
 if os.path.isdir(_NODE_BIN):
