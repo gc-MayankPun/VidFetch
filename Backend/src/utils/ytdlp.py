@@ -6,23 +6,35 @@ import shutil
 import subprocess
 import time
 
-# Use YTDLP_BIN from env if available (set by Node.js)
-YTDLP_BIN = os.environ.get("YTDLP_BIN", "/usr/local/bin/yt-dlp")
-
-# Ensure node is in PATH and set NODE env var
-NODE_BIN = "/root/.nix-profile/bin/node"
-if os.path.exists(NODE_BIN):
-    os.environ["NODE"] = NODE_BIN
-    os.environ["PATH"] = f"/root/.nix-profile/bin:/usr/local/bin:{os.environ.get('PATH', '')}"
+# -----------------------------
+# Ensure Node is available
+# -----------------------------
+_node = (
+    shutil.which("node") or
+    "/opt/render/project/nodes/node-22.22.0/bin/node"
+)
+if _node and os.path.exists(_node):
+    _node_dir = os.path.dirname(_node)
+    os.environ["PATH"] = f"{_node_dir}:{os.environ.get('PATH', '')}"
 
 
 # -----------------------------
 # Base Command Builder
 # -----------------------------
 def base_cmd(cookies_path=None, client="web"):
+    for p in [
+        os.path.expanduser("~/.deno/bin"),
+        "/opt/render/project/nodes/node-22.22.0/bin",
+        "/usr/bin",
+        "/usr/local/bin",
+    ]:
+        if os.path.isdir(p) and p not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{p}:{os.environ['PATH']}"
+
     cmd = [
-        YTDLP_BIN,
+        "yt-dlp",
         "--no-playlist",
+        "--no-warnings",
         "--force-ipv4",
         "--sleep-requests", "2",
         "--socket-timeout", "30",
@@ -61,7 +73,6 @@ def run_cmd_with_retry(url, base_args, cookies_path=None, retries=3):
                 if result.returncode == 0:
                     return result.stdout.strip()
 
-                print(f"[client={client}] stderr: {result.stderr}", file=sys.stderr)
                 last_error = result.stderr.strip()
 
             except subprocess.TimeoutExpired:
@@ -86,6 +97,7 @@ def cmd_info(url, cookies_path=None):
 
     formats = info.get("formats", [])
 
+    # Best combined (video + audio together)
     combined = [
         f for f in formats
         if f.get("vcodec") != "none" and f.get("acodec") != "none"
@@ -93,6 +105,7 @@ def cmd_info(url, cookies_path=None):
     combined.sort(key=lambda f: f.get("height") or 0, reverse=True)
     best_combined = combined[0] if combined else None
 
+    # Best video-only
     video_only = [
         f for f in formats
         if f.get("vcodec") != "none"
@@ -101,6 +114,7 @@ def cmd_info(url, cookies_path=None):
     video_only.sort(key=lambda f: f.get("height") or 0, reverse=True)
     best_video = video_only[0] if video_only else None
 
+    # Best audio-only
     audio_only = [
         f for f in formats
         if f.get("vcodec") == "none"
@@ -111,6 +125,7 @@ def cmd_info(url, cookies_path=None):
 
     result_formats = []
 
+    # MP4: Use best video + audio
     if best_video and best_audio:
         result_formats.append({
             "itag": f"{best_video['format_id']}+{best_audio['format_id']}",
@@ -126,7 +141,9 @@ def cmd_info(url, cookies_path=None):
             "type": "mp4",
         })
 
+    # MP3: Prefer audio-only, fall back to best available
     mp3_itag = None
+
     if best_audio:
         mp3_itag = best_audio["format_id"]
     elif best_combined:

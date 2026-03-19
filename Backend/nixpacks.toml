@@ -1,13 +1,5 @@
 [phases.setup]
-nixPkgs = ["python3", "nodejs_22", "ffmpeg", "curl"]
-
-[phases.build]
-cmds = [
-  "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp",
-  "chmod +x /usr/local/bin/yt-dlp",
-  "/usr/local/bin/yt-dlp --version",
-  "ln -sf /root/.nix-profile/bin/node /usr/local/bin/node"
-]
+nixPkgs = ["yt-dlp", "python3", "nodejs_22", "ffmpeg"]
 
 [phases.install]
 cmds = ["npm install"]
