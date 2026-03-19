@@ -93,7 +93,7 @@ async function downloadController(req, res) {
       res.setHeader("Transfer-Encoding", "chunked");
 
       // const child = spawn("yt-dlp", [
-      const child = spawn(DOWNLOAD_BIN, [
+      const child = spawn("yt-dlp", [
         "-f",
         "bestaudio[ext=webm]/bestaudio",
         "-o",
@@ -148,7 +148,7 @@ async function downloadController(req, res) {
       res.setHeader("Transfer-Encoding", "chunked");
 
       // const child = spawn("yt-dlp", [
-      const child = spawn(DOWNLOAD_BIN, [
+      const child = spawn("yt-dlp", [
         "-f",
         "bestvideo+bestaudio/best",
         "--merge-output-format",
