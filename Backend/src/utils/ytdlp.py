@@ -80,6 +80,7 @@ def run_cmd_with_retry(url, base_args, cookies_path=None, retries=3):
                     return result.stdout.strip()
 
                 last_error = result.stderr.strip()
+                print(f"[debug] client={client} stderr={last_error[-200:]}", file=sys.stderr)
 
             except subprocess.TimeoutExpired:
                 last_error = "Command timed out after 5 minutes"
