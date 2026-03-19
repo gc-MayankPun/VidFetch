@@ -8,6 +8,9 @@ import time
 
 YTDLP_BIN = "/usr/local/bin/yt-dlp"
 
+import os as _os
+print(f"YTDLP_BIN exists: {_os.path.exists(YTDLP_BIN)}", file=__import__('sys').stderr)
+
 
 # -----------------------------
 # Ensure Node is available
