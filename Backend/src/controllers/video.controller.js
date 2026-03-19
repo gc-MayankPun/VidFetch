@@ -118,9 +118,6 @@ async function downloadController(req, res) {
   if (isAudio) {
     const tmpFile = path.join("/tmp", `${randomUUID()}.mp3`);
 
-    res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
-    res.setHeader("Content-Type", "audio/mpeg");
-
     const args = [
       ...baseArgs(),
       "-f", "bestaudio",
@@ -136,10 +133,13 @@ async function downloadController(req, res) {
     const proc = spawn(YTDLP_BIN, args);
     proc.stderr.on("data", (d) => console.error("[yt-dlp]", d.toString().trim()));
 
-    // If client disconnects early, kill yt-dlp and clean up
-    res.on("close", () => {
-      proc.kill();
-      fs.unlink(tmpFile, () => {});
+    let clientGone = false;
+    req.on("close", () => {
+      if (!res.writableEnded) {
+        clientGone = true;
+        proc.kill();
+        fs.unlink(tmpFile, () => {});
+      }
     });
 
     proc.on("error", () => {
@@ -147,28 +147,40 @@ async function downloadController(req, res) {
     });
 
     proc.on("close", (code) => {
+      if (clientGone) return;
+
       if (code !== 0) {
         if (!res.headersSent)
           res.status(500).json({ message: "yt-dlp conversion failed" });
         return;
       }
 
-      // Stream the finished MP3 to client
-      const stream = fs.createReadStream(tmpFile);
-      stream.pipe(res);
-      stream.on("error", () => {
-        if (!res.headersSent)
-          res.status(500).json({ message: "Failed to stream audio file" });
-      });
-      stream.on("close", () => {
-        fs.unlink(tmpFile, () => {}); // clean up temp file
+      fs.stat(tmpFile, (err, stat) => {
+        if (err || stat.size === 0) {
+          if (!res.headersSent)
+            res.status(500).json({ message: "Audio file empty or missing" });
+          return;
+        }
+
+        res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
+        res.setHeader("Content-Type", "audio/mpeg");
+        res.setHeader("Content-Length", stat.size);
+
+        const stream = fs.createReadStream(tmpFile);
+        stream.pipe(res);
+        stream.on("close", () => fs.unlink(tmpFile, () => {}));
+        stream.on("error", () => {
+          if (!res.headersSent)
+            res.status(500).json({ message: "Failed to stream audio" });
+          fs.unlink(tmpFile, () => {});
+        });
       });
     });
 
     return;
   }
 
-  // ── Video path (unchanged) ──────────────────────────────────────────────
+  // ── Video path (original, untouched) ────────────────────────────────────
   res.setHeader("Content-Disposition", `attachment; filename="video.mp4"`);
   res.setHeader("Content-Type", "video/mp4");
   res.setHeader("Transfer-Encoding", "chunked");
@@ -194,6 +206,7 @@ async function downloadController(req, res) {
   });
   res.on("close", () => proc.kill());
 }
+
 // async function downloadController(req, res) {
 //   const { url, itag, type } = req.query;
 //   if (!url || !itag)
