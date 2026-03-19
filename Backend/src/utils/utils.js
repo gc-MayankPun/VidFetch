@@ -59,8 +59,9 @@ export function baseArgs(client = "web") {
 }
 
 // ── Run yt-dlp and collect stdout ─────────────────────────────────────────────
-export function runYtdlp(args, timeoutMs = 120000) {
+export function runYtdlp(args, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
+    console.log(`[yt-dlp] spawning with args: ${args.slice(-3).join(" ")}`);
     const proc = spawn(YTDLP_BIN, args);
     let stdout = "";
     let stderr = "";
