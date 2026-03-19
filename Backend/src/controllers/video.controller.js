@@ -2,7 +2,8 @@ import { spawn } from "child_process";
 import {
   isValidYouTubeUrl,
   normalizeYouTubeUrl,
-  runYtdlp,
+  // runYtdlp,
+  runWithRetry,
   YTDLP_BIN,
   baseArgs,
 } from "../utils/utils.js";
@@ -20,16 +21,21 @@ async function videoInfoController(req, res) {
 
   try {
     console.log("[info] about to call runYtdlp");
-    const raw = await runYtdlp([
-      ...baseArgs(), // ← baseArgs() guards existsSync(COOKIES_PATH) for you
-      "--dump-json",
-      "--no-playlist",
-      "--skip-download", // ← add this
-      "--ignore-errors",
-      "--socket-timeout",
-      "30",
+    // const raw = await runYtdlp([
+    //   ...baseArgs(), // ← baseArgs() guards existsSync(COOKIES_PATH) for you
+    //   "--dump-json",
+    //   "--no-playlist",
+    //   "--skip-download", // ← add this
+    //   "--ignore-errors",
+    //   "--socket-timeout",
+    //   "30",
+    //   cleanUrl,
+    // ]);
+    const raw = await runWithRetry(
+      ["--dump-json", "--no-playlist", "--socket-timeout", "30"],
       cleanUrl,
-    ]);
+      3, // retry across all 3 clients, up to 3 attempts
+    );
     console.log("[info] runYtdlp returned");
     const info = JSON.parse(raw);
     const formats = info.formats || [];

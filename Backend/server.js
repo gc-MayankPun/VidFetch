@@ -1,9 +1,9 @@
 import app from "./src/app.js";
 import { execSync, spawn } from "child_process";
+import { YTDLP_BIN } from "./src/utils/utils.js";  // ← add this import
 
-// Verify yt-dlp binary at startup
 try {
-  const version = execSync("/usr/local/bin/yt-dlp --version").toString().trim();
+  const version = execSync(`${YTDLP_BIN} --version`).toString().trim();  // ← use YTDLP_BIN
   console.log("[yt-dlp] version:", version);
 } catch (e) {
   console.error("[yt-dlp] binary check failed:", e.message);
@@ -12,8 +12,7 @@ try {
 app.listen(3000, () => {
   console.log("Server listening on PORT 3000");
 
-  // Warm up yt-dlp
-  const probe = spawn("/usr/local/bin/yt-dlp", ["--version"]);
+  const probe = spawn(YTDLP_BIN, ["--version"]);  // ← use YTDLP_BIN
   probe.stdout.on("data", d => console.log("[yt-dlp warmup]", d.toString().trim()));
   probe.on("close", code => console.log(`[yt-dlp warmup] exited ${code}`));
 });

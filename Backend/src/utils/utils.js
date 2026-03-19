@@ -90,9 +90,7 @@ export function runYtdlp(args, timeoutMs = 30000) {
 }
 
 // ── Run with client rotation + retries ───────────────────────────────────────
-// const CLIENTS = ["web", "web_safari", "android", "android_creator"];
-// // utils.js
-const CLIENTS = ["web", "android", "ios"]; // these three actually work
+const CLIENTS = ["web", "android", "ios"];
 
 export async function runWithRetry(extraArgs, url, retries = 1) {
   let lastError;
