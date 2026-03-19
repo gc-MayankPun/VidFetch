@@ -117,12 +117,11 @@ async function downloadController(req, res) {
   const isAudio = type === "mp3";
 
   if (isAudio) {
-    // const tmpFile = path.join("/tmp", `${randomUUID()}.mp3`);
     const tmpFile = path.join(TMP_DIR, `${randomUUID()}.mp3`);
 
     const args = [
       ...baseArgs(),
-      "-f", "bestaudio",
+      "-f", "bestaudio/best",  // ← CHANGED: was "bestaudio", now fallbacks to best combined if no audio-only stream
       "-x",
       "--audio-format", "mp3",
       "--audio-quality", "0",
@@ -133,7 +132,13 @@ async function downloadController(req, res) {
     ];
 
     const proc = spawn(YTDLP_BIN, args);
-    proc.stderr.on("data", (d) => console.error("[yt-dlp]", d.toString().trim()));
+
+    let stderrLog = "";  // ← CHANGED: collect stderr for better error reporting
+    proc.stderr.on("data", (d) => {
+      const line = d.toString().trim();
+      stderrLog += line + "\n";
+      console.error("[yt-dlp audio]", line);
+    });
 
     let clientGone = false;
     req.on("close", () => {
@@ -152,8 +157,9 @@ async function downloadController(req, res) {
       if (clientGone) return;
 
       if (code !== 0) {
+        console.error("[yt-dlp audio] FAILED, full stderr:\n", stderrLog);  // ← CHANGED: log full stderr on failure
         if (!res.headersSent)
-          res.status(500).json({ message: "yt-dlp conversion failed" });
+          res.status(500).json({ message: "yt-dlp conversion failed", detail: stderrLog });  // ← CHANGED: include detail in response
         return;
       }
 
