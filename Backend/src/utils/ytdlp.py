@@ -8,6 +8,11 @@ import time
 
 YTDLP_BIN = "/usr/local/bin/yt-dlp"
 
+# Ensure node is in PATH for yt-dlp n-challenge solving
+_NODE_BIN = "/root/.nix-profile/bin"
+if os.path.isdir(_NODE_BIN):
+    os.environ["PATH"] = f"{_NODE_BIN}:{os.environ.get('PATH', '')}"
+
 import os as _os
 print(f"YTDLP_BIN exists: {_os.path.exists(YTDLP_BIN)}", file=__import__('sys').stderr)
 
