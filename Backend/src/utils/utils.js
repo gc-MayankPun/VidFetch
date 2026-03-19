@@ -3,9 +3,11 @@ import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import path from "path";
 
-export const YTDLP_BIN = existsSync("/usr/local/bin/yt-dlp")
-  ? "/usr/local/bin/yt-dlp"
-  : "yt-dlp";
+import { execSync } from "child_process";
+export const YTDLP_BIN = (() => {
+  try { return execSync("which yt-dlp").toString().trim(); }
+  catch { return "yt-dlp"; }
+})();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,7 +32,7 @@ export function runPython(args) {
   return new Promise((resolve, reject) => {
     const cookiesArg = existsSync(COOKIES_PATH) ? [COOKIES_PATH] : [];
     const proc = spawn("python3", [PYTHON_SCRIPT, ...args, ...cookiesArg]);
-
+    
     let stdout = "";
     let stderr = "";
 

@@ -6,16 +6,12 @@ import shutil
 import subprocess
 import time
 
-YTDLP_BIN = "yt-dlp"
+YTDLP_BIN = shutil.which("yt-dlp") or "yt-dlp"
 
 # Ensure node is in PATH for yt-dlp n-challenge solving
 _NODE_BIN = "/root/.nix-profile/bin"
 if os.path.isdir(_NODE_BIN):
     os.environ["PATH"] = f"{_NODE_BIN}:{os.environ.get('PATH', '')}"
-
-import os as _os
-print(f"YTDLP_BIN exists: {_os.path.exists(YTDLP_BIN)}", file=__import__('sys').stderr)
-
 
 # -----------------------------
 # Ensure Node is available
@@ -298,6 +294,8 @@ def cmd_resolve(url, itag, cookies_path=None):
 # MAIN
 # ─────────────────────────────────
 if __name__ == "__main__":
+    print(f"YTDLP_BIN: {YTDLP_BIN} (exists: {os.path.exists(YTDLP_BIN)})", file=sys.stderr)
+
     try:
         action = sys.argv[1]
 
