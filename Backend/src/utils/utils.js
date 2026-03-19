@@ -61,6 +61,31 @@ export function runPython(args) {
   });
 }
 
+export function normalizeYouTubeUrl(url) {
+  try {
+    const u = new URL(url);
+
+    if (u.pathname.startsWith("/shorts/")) {
+      const videoId = u.pathname.replace("/shorts/", "");
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+
+    if (u.hostname === "youtu.be") {
+      const videoId = u.pathname.replace("/", "");
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+
+    const videoId = u.searchParams.get("v");
+    if (videoId) {
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+
+    return url;
+  } catch {
+    return url;
+  }
+}
+
 export function isValidYouTubeUrl(url) {
   try {
     const u = new URL(url);

@@ -13,6 +13,7 @@ import { randomUUID } from "crypto";
 import {
   isValidYouTubeUrl,
   runPython,
+  normalizeYouTubeUrl,
   TMP_DIR,
   COOKIES_PATH,
   YTDLP_BIN,        // ← add this
@@ -77,6 +78,8 @@ async function downloadController(req, res) {
   if (!isValidYouTubeUrl(url))
     return res.status(400).json({ message: "Invalid YouTube URL" });
 
+  const cleanUrl = normalizeYouTubeUrl(url);
+
   // ── MP3 ───────────────────────────────────────────────────────────────────
   if (type === "mp3") {
     try {
@@ -93,7 +96,7 @@ async function downloadController(req, res) {
         "--extractor-args", "youtube:player_client=web",
         "--socket-timeout", "30",
         "--http-chunk-size", "1048576",
-        url,
+        cleanUrl,
       ]);
 
       child.stdout.pipe(res);
@@ -141,7 +144,7 @@ async function downloadController(req, res) {
         "--extractor-args", "youtube:player_client=web",
         "--socket-timeout", "30",
         "--http-chunk-size", "1048576",
-        url,
+        cleanUrl,
       ]);
 
       child.stdout.pipe(res);
