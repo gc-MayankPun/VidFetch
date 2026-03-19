@@ -100,27 +100,42 @@ async function downloadController(req, res) {
 
   const cleanUrl = normalizeYouTubeUrl(url);
   const isAudio = type === "mp3";
-  const filename = isAudio ? "audio.m4a" : "video.mp4";
-  const mime = isAudio ? "audio/mp4" : "video/mp4";
+
+  // ← mp3 instead of m4a
+  const filename = isAudio ? "audio.mp3" : "video.mp4";
+  const mime = isAudio ? "audio/mpeg" : "video/mp4";
 
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.setHeader("Content-Type", mime);
   res.setHeader("Transfer-Encoding", "chunked");
 
-  const proc = spawn(YTDLP_BIN, [
+  const args = [
     ...baseArgs(),
-    "-f",
-    decodeURIComponent(itag), // ← use the format selector string directly
-    "--merge-output-format",
-    "mp4",
     "-o",
     "-",
     "--socket-timeout",
     "30",
     "--http-chunk-size",
     "1048576",
-    cleanUrl,
-  ]);
+  ];
+
+  if (isAudio) {
+    args.push(
+      "-f",
+      "bestaudio",
+      "-x", // ← extract audio
+      "--audio-format",
+      "mp3", // ← convert to mp3
+      "--audio-quality",
+      "0", // ← best quality
+    );
+  } else {
+    args.push("-f", decodeURIComponent(itag), "--merge-output-format", "mp4");
+  }
+
+  args.push(cleanUrl);
+
+  const proc = spawn(YTDLP_BIN, args);
 
   proc.stdout.pipe(res);
   proc.stderr.on("data", (d) => console.error("[yt-dlp]", d.toString().trim()));
