@@ -1,87 +1,122 @@
 import { existsSync, mkdirSync, writeFileSync } from "fs";
-import { spawn } from "child_process";
+import { execSync, spawn } from "child_process";
 import { fileURLToPath } from "url";
 import path from "path";
 
-import { execSync } from "child_process";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ── Binary resolution ─────────────────────────────────────────────────────────
 export const YTDLP_BIN = (() => {
+  if (existsSync("/usr/local/bin/yt-dlp")) return "/usr/local/bin/yt-dlp";
   try { return execSync("which yt-dlp").toString().trim(); }
   catch { return "yt-dlp"; }
 })();
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+console.log(`[utils] YTDLP_BIN: ${YTDLP_BIN} (exists: ${existsSync(YTDLP_BIN)})`);
 
 // ── Cookies ───────────────────────────────────────────────────────────────────
 export const COOKIES_PATH = path.resolve(__dirname, "../../../cookies.txt");
 if (process.env.YOUTUBE_COOKIES) {
   writeFileSync(COOKIES_PATH, process.env.YOUTUBE_COOKIES, "utf-8");
-  console.log("[ytdlp.py] cookies.txt written from env var");
+  console.log("[utils] cookies.txt written from env var");
 }
 
-// ── Python script path ────────────────────────────────────────────────────────
-export const PYTHON_SCRIPT = path.resolve(__dirname, "./ytdlp.py");
-
+// ── Tmp dir ───────────────────────────────────────────────────────────────────
 export const TMP_DIR = path.resolve(__dirname, "../../../tmp");
 if (!existsSync(TMP_DIR)) mkdirSync(TMP_DIR, { recursive: true });
 
-/**
- * Run ytdlp.py with given args.
- * Returns parsed JSON from stdout.
- */
-export function runPython(args) {
+// ── Base args builder ─────────────────────────────────────────────────────────
+export function baseArgs(client = "web") {
+  const args = [
+    "--no-playlist",
+    "--no-warnings",
+    "--force-ipv4",
+    "--sleep-requests", "2",
+    "--socket-timeout", "30",
+    "--http-chunk-size", "1048576",
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "--extractor-args", `youtube:player_client=${client}`,
+  ];
+
+  const proxy = process.env.PROXY_URL;
+  if (proxy) args.push("--proxy", proxy);
+
+  if (existsSync(COOKIES_PATH)) args.push("--cookies", COOKIES_PATH);
+
+  return args;
+}
+
+// ── Run yt-dlp and collect stdout ─────────────────────────────────────────────
+export function runYtdlp(args, timeoutMs = 120000) {
   return new Promise((resolve, reject) => {
-    const cookiesArg = existsSync(COOKIES_PATH) ? [COOKIES_PATH] : [];
-    const proc = spawn("python3", [PYTHON_SCRIPT, ...args, ...cookiesArg]);
-    
+    const proc = spawn(YTDLP_BIN, args);
     let stdout = "";
     let stderr = "";
+
+    const timer = setTimeout(() => {
+      proc.kill();
+      reject(new Error("yt-dlp timed out"));
+    }, timeoutMs);
 
     proc.stdout.on("data", (d) => (stdout += d));
     proc.stderr.on("data", (d) => (stderr += d));
 
     proc.on("close", (code) => {
+      clearTimeout(timer);
       if (code === 0) {
-        try {
-          resolve(JSON.parse(stdout));
-        } catch {
-          reject(new Error(`Failed to parse python output: ${stdout}`));
-        }
+        resolve(stdout.trim());
       } else {
-        // Try to parse error JSON from stderr
-        try {
-          const errJson = JSON.parse(stderr);
-          reject(new Error(errJson.error || stderr));
-        } catch {
-          reject(new Error(stderr || `python exited with code ${code}`));
-        }
+        reject(new Error(stderr.trim() || `yt-dlp exited with code ${code}`));
       }
     });
 
     proc.on("error", (err) => {
-      reject(new Error(`Failed to spawn python3: ${err.message}`));
+      clearTimeout(timer);
+      reject(new Error(`Failed to spawn yt-dlp: ${err.message}`));
     });
   });
 }
 
+// ── Run with client rotation + retries ───────────────────────────────────────
+const CLIENTS = ["web", "web_safari", "android", "android_creator"];
+
+export async function runWithRetry(extraArgs, url, retries = 3) {
+  let lastError;
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    for (const client of CLIENTS) {
+      try {
+        const args = [...baseArgs(client), ...extraArgs, url];
+        const result = await runYtdlp(args);
+        return result;
+      } catch (err) {
+        lastError = err.message;
+        console.error(`[debug] client=${client} error=${lastError.slice(-200)}`);
+      }
+    }
+
+    if (attempt < retries - 1) {
+      const wait = 5000 * (attempt + 1);
+      console.log(`Retrying in ${wait / 1000}s...`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+
+  throw new Error(lastError || "yt-dlp failed after retries");
+}
+
+// ── URL helpers ───────────────────────────────────────────────────────────────
 export function normalizeYouTubeUrl(url) {
   try {
     const u = new URL(url);
-
     if (u.pathname.startsWith("/shorts/")) {
-      const videoId = u.pathname.replace("/shorts/", "");
-      return `https://www.youtube.com/watch?v=${videoId}`;
+      return `https://www.youtube.com/watch?v=${u.pathname.replace("/shorts/", "")}`;
     }
-
     if (u.hostname === "youtu.be") {
-      const videoId = u.pathname.replace("/", "");
-      return `https://www.youtube.com/watch?v=${videoId}`;
+      return `https://www.youtube.com/watch?v=${u.pathname.replace("/", "")}`;
     }
-
-    const videoId = u.searchParams.get("v");
-    if (videoId) {
-      return `https://www.youtube.com/watch?v=${videoId}`;
-    }
-
+    const v = u.searchParams.get("v");
+    if (v) return `https://www.youtube.com/watch?v=${v}`;
     return url;
   } catch {
     return url;
@@ -91,12 +126,7 @@ export function normalizeYouTubeUrl(url) {
 export function isValidYouTubeUrl(url) {
   try {
     const u = new URL(url);
-    return (
-      u.hostname === "www.youtube.com" ||
-      u.hostname === "youtube.com" ||
-      u.hostname === "youtu.be" ||
-      u.hostname === "m.youtube.com"
-    );
+    return ["www.youtube.com", "youtube.com", "youtu.be", "m.youtube.com"].includes(u.hostname);
   } catch {
     return false;
   }
