@@ -8,10 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install deno
-RUN curl -fsSL https://deno.land/install.sh | sh
-ENV DENO_INSTALL="/root/.deno"
-ENV PATH="${DENO_INSTALL}/bin:${PATH}"
+# Install deno (system-wide, accessible by all users including app)
+RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
 RUN deno --version
 
 # Install yt-dlp
@@ -19,16 +17,17 @@ RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_lin
     -o /usr/local/bin/yt-dlp && chmod +x /usr/local/bin/yt-dlp
 RUN yt-dlp --version
 
+# Create non-root user
 RUN addgroup --system app && adduser --system --ingroup app app
 
 WORKDIR /app
+
 COPY package*.json ./
 RUN npm install --omit=dev
-COPY . .
-RUN chown -R app:app /app
 
-# Give app user access to deno
-RUN chown -R app:app /root/.deno
+COPY . .
+
+RUN chown -R app:app /app
 
 USER app
 
