@@ -52,7 +52,7 @@ def base_cmd(cookies_path=None, client="web"):
         "--socket-timeout", "30",
         "--http-chunk-size", "1048576",
         "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "--extractor-args", f"youtube:player_client={client}",
+        "--extractor-args", f"youtube:player_client={client};po_token=web+MnRs",
     ]
 
     proxy = os.environ.get("PROXY_URL", "")
@@ -90,7 +90,7 @@ def run_cmd_with_retry(url, base_args, cookies_path=None, retries=3):
                     return result.stdout.strip()
 
                 last_error = result.stderr.strip()
-                print(f"[debug] client={client} stderr={last_error[-200:]}", file=sys.stderr)
+                print(f"[debug] client={client} stderr={last_error}", file=sys.stderr)
 
             except subprocess.TimeoutExpired:
                 last_error = "Command timed out after 5 minutes"

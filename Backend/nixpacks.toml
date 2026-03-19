@@ -6,7 +6,8 @@ cmds = [
   "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp",
   "chmod +x /usr/local/bin/yt-dlp",
   "ln -sf /root/.nix-profile/bin/node /usr/local/bin/node",
-  "/usr/local/bin/yt-dlp --version"
+  "/usr/local/bin/yt-dlp --version",
+  "/usr/local/bin/yt-dlp -v --skip-download 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' 2>&1 | head -5 || true"
 ]
 
 [phases.install]
