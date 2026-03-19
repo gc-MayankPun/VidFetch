@@ -106,129 +106,6 @@ async function videoInfoController(req, res) {
 // ─── GET /api/videos/download ─────────────────────────────────────────────────
 
 // video.controller.js — replace downloadController body:
-async function downloadController(req, res) {
-  const { url, itag, type } = req.query;
-  if (!url || !itag)
-    return res.status(400).json({ message: "url and itag are required" });
-  if (!isValidYouTubeUrl(url))
-    return res.status(400).json({ message: "Invalid YouTube URL" });
-
-  const cleanUrl = normalizeYouTubeUrl(url);
-  const isAudio = type === "mp3";
-
-  if (isAudio) {
-    const tmpFile = path.join(TMP_DIR, `${randomUUID()}.mp3`);
-
-    let clientGone = false;
-    req.on("close", () => {
-      clientGone = true;
-      fs.unlink(tmpFile, () => {});
-    });
-
-    const clients = ["web", "android", "ios", "mweb"];
-    let success = false;
-
-    for (const client of clients) {
-      if (clientGone) return;
-
-      const args = [
-        ...baseArgs(client),
-        "-f",
-        "bestaudio/best",
-        "-x",
-        "--audio-format",
-        "mp3",
-        "--audio-quality",
-        "0",
-        "--socket-timeout",
-        "30",
-        "--no-playlist",
-        "-o",
-        tmpFile,
-        cleanUrl,
-      ];
-
-      const code = await new Promise((resolve) => {
-        const proc = spawn(YTDLP_BIN, args);
-        proc.stderr.on("data", (d) =>
-          console.error(`[yt-dlp audio:${client}]`, d.toString().trim()),
-        );
-        proc.on("error", () => resolve(1));
-        proc.on("close", resolve);
-        req.on("close", () => proc.kill());
-      });
-
-      if (code === 0) {
-        success = true;
-        break;
-      }
-      console.error(`[yt-dlp audio] client=${client} failed, trying next...`);
-    }
-
-    if (!success) {
-      if (!res.headersSent)
-        res
-          .status(500)
-          .json({ message: "Audio download failed on all clients" });
-      return;
-    }
-
-    fs.stat(tmpFile, (err, stat) => {
-      if (err || stat.size === 0) {
-        if (!res.headersSent)
-          res.status(500).json({ message: "Audio file empty or missing" });
-        return;
-      }
-
-      res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
-      res.setHeader("Content-Type", "audio/mpeg");
-      res.setHeader("Content-Length", stat.size);
-
-      const stream = fs.createReadStream(tmpFile);
-      stream.pipe(res);
-      stream.on("close", () => fs.unlink(tmpFile, () => {}));
-      stream.on("error", () => {
-        if (!res.headersSent)
-          res.status(500).json({ message: "Failed to stream audio" });
-        fs.unlink(tmpFile, () => {});
-      });
-    });
-
-    return;
-  }
-
-  // ── Video path (original, untouched) ────────────────────────────────────
-  res.setHeader("Content-Disposition", `attachment; filename="video.mp4"`);
-  res.setHeader("Content-Type", "video/mp4");
-  res.setHeader("Transfer-Encoding", "chunked");
-
-  const args = [
-    ...baseArgs(),
-    "-o",
-    "-",
-    "--socket-timeout",
-    "30",
-    "--http-chunk-size",
-    "1048576",
-    "-f",
-    decodeURIComponent(itag),
-    "--merge-output-format",
-    "mp4",
-    cleanUrl,
-  ];
-  
-  const proc = spawn(YTDLP_BIN, args);
-  proc.stdout.pipe(res);
-  proc.stderr.on("data", (d) => console.error("[yt-dlp]", d.toString().trim()));
-  proc.on("error", () => {
-    if (!res.headersSent) res.status(500).json({ message: "Spawn failed" });
-  });
-  proc.on("close", (code) => {
-    if (code !== 0 && !res.writableEnded) res.end();
-  });
-  res.on("close", () => proc.kill());
-}
-
 // async function downloadController(req, res) {
 //   const { url, itag, type } = req.query;
 //   if (!url || !itag)
@@ -242,58 +119,87 @@ async function downloadController(req, res) {
 //   if (isAudio) {
 //     const tmpFile = path.join(TMP_DIR, `${randomUUID()}.mp3`);
 
-//     res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
-//     res.setHeader("Content-Type", "audio/mpeg");
-
-//     const args = [
-//       ...baseArgs(),
-//       "-f", "bestaudio",
-//       "-x",
-//       "--audio-format", "mp3",
-//       "--audio-quality", "0",
-//       "--socket-timeout", "30",
-//       "--no-playlist",
-//       "-o", tmpFile,
-//       cleanUrl,
-//     ];
-
-//     const proc = spawn(YTDLP_BIN, args);
-//     proc.stderr.on("data", (d) => console.error("[yt-dlp]", d.toString().trim()));
-
-//     // If client disconnects early, kill yt-dlp and clean up
-//     res.on("close", () => {
-//       proc.kill();
+//     let clientGone = false;
+//     req.on("close", () => {
+//       clientGone = true;
 //       fs.unlink(tmpFile, () => {});
 //     });
 
-//     proc.on("error", () => {
-//       if (!res.headersSent) res.status(500).json({ message: "Spawn failed" });
-//     });
+//     const clients = ["web", "android", "ios", "mweb"];
+//     let success = false;
 
-//     proc.on("close", (code) => {
-//       if (code !== 0) {
+//     for (const client of clients) {
+//       if (clientGone) return;
+
+//       const args = [
+//         ...baseArgs(client),
+//         "-f",
+//         "bestaudio/best",
+//         "-x",
+//         "--audio-format",
+//         "mp3",
+//         "--audio-quality",
+//         "0",
+//         "--socket-timeout",
+//         "30",
+//         "--no-playlist",
+//         "-o",
+//         tmpFile,
+//         cleanUrl,
+//       ];
+
+//       const code = await new Promise((resolve) => {
+//         const proc = spawn(YTDLP_BIN, args);
+//         proc.stderr.on("data", (d) =>
+//           console.error(`[yt-dlp audio:${client}]`, d.toString().trim()),
+//         );
+//         proc.on("error", () => resolve(1));
+//         proc.on("close", resolve);
+//         req.on("close", () => proc.kill());
+//       });
+
+//       if (code === 0) {
+//         success = true;
+//         break;
+//       }
+//       console.error(`[yt-dlp audio] client=${client} failed, trying next...`);
+//     }
+
+//     if (!success) {
+//       if (!res.headersSent)
+//         res
+//           .status(500)
+//           .json({ message: "Audio download failed on all clients" });
+//       return;
+//     }
+
+//     fs.stat(tmpFile, (err, stat) => {
+//       if (err || stat.size === 0) {
 //         if (!res.headersSent)
-//           res.status(500).json({ message: "yt-dlp conversion failed" });
+//           res.status(500).json({ message: "Audio file empty or missing" });
 //         return;
 //       }
 
-//       // Stream the finished MP3 to client
+//       res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
+//       res.setHeader("Content-Type", "audio/mpeg");
+//       res.setHeader("Content-Length", stat.size);
+
 //       const stream = fs.createReadStream(tmpFile);
 //       stream.pipe(res);
+//       stream.on("close", () => fs.unlink(tmpFile, () => {}));
 //       stream.on("error", () => {
 //         if (!res.headersSent)
-//           res.status(500).json({ message: "Failed to stream audio file" });
-//       });
-//       stream.on("close", () => {
-//         fs.unlink(tmpFile, () => {}); // clean up temp file
+//           res.status(500).json({ message: "Failed to stream audio" });
+//         fs.unlink(tmpFile, () => {});
 //       });
 //     });
 
 //     return;
 //   }
 
-//   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-//   res.setHeader("Content-Type", mime);
+//   // ── Video path (original, untouched) ────────────────────────────────────
+//   res.setHeader("Content-Disposition", `attachment; filename="video.mp4"`);
+//   res.setHeader("Content-Type", "video/mp4");
 //   res.setHeader("Transfer-Encoding", "chunked");
 
 //   const args = [
@@ -304,26 +210,14 @@ async function downloadController(req, res) {
 //     "30",
 //     "--http-chunk-size",
 //     "1048576",
+//     "-f",
+//     decodeURIComponent(itag),
+//     "--merge-output-format",
+//     "mp4",
+//     cleanUrl,
 //   ];
 
-//   if (isAudio) {
-//     args.push(
-//       "-f",
-//       "bestaudio",
-//       "-x", // ← extract audio
-//       "--audio-format",
-//       "mp3", // ← convert to mp3
-//       "--audio-quality",
-//       "0", // ← best quality
-//     );
-//   } else {
-//     args.push("-f", decodeURIComponent(itag), "--merge-output-format", "mp4");
-//   }
-
-//   args.push(cleanUrl);
-
 //   const proc = spawn(YTDLP_BIN, args);
-
 //   proc.stdout.pipe(res);
 //   proc.stderr.on("data", (d) => console.error("[yt-dlp]", d.toString().trim()));
 //   proc.on("error", () => {
@@ -334,6 +228,112 @@ async function downloadController(req, res) {
 //   });
 //   res.on("close", () => proc.kill());
 // }
+
+async function downloadController(req, res) {
+  const { url, itag, type } = req.query;
+  if (!url || !itag)
+    return res.status(400).json({ message: "url and itag are required" });
+  if (!isValidYouTubeUrl(url))
+    return res.status(400).json({ message: "Invalid YouTube URL" });
+
+  const cleanUrl = normalizeYouTubeUrl(url);
+  const isAudio = type === "mp3";
+
+  if (isAudio) {
+    const tmpFile = path.join(TMP_DIR, `${randomUUID()}.mp3`);
+
+    res.setHeader("Content-Disposition", `attachment; filename="audio.mp3"`);
+    res.setHeader("Content-Type", "audio/mpeg");
+
+    const args = [
+      ...baseArgs(),
+      "-f", "bestaudio",
+      "-x",
+      "--audio-format", "mp3",
+      "--audio-quality", "0",
+      "--socket-timeout", "30",
+      "--no-playlist",
+      "-o", tmpFile,
+      cleanUrl,
+    ];
+
+    const proc = spawn(YTDLP_BIN, args);
+    proc.stderr.on("data", (d) => console.error("[yt-dlp]", d.toString().trim()));
+
+    // If client disconnects early, kill yt-dlp and clean up
+    res.on("close", () => {
+      proc.kill();
+      fs.unlink(tmpFile, () => {});
+    });
+
+    proc.on("error", () => {
+      if (!res.headersSent) res.status(500).json({ message: "Spawn failed" });
+    });
+
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        if (!res.headersSent)
+          res.status(500).json({ message: "yt-dlp conversion failed" });
+        return;
+      }
+
+      // Stream the finished MP3 to client
+      const stream = fs.createReadStream(tmpFile);
+      stream.pipe(res);
+      stream.on("error", () => {
+        if (!res.headersSent)
+          res.status(500).json({ message: "Failed to stream audio file" });
+      });
+      stream.on("close", () => {
+        fs.unlink(tmpFile, () => {}); // clean up temp file
+      });
+    });
+
+    return;
+  }
+
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Content-Type", mime);
+  res.setHeader("Transfer-Encoding", "chunked");
+
+  const args = [
+    ...baseArgs(),
+    "-o",
+    "-",
+    "--socket-timeout",
+    "30",
+    "--http-chunk-size",
+    "1048576",
+  ];
+
+  if (isAudio) {
+    args.push(
+      "-f",
+      "bestaudio",
+      "-x", // ← extract audio
+      "--audio-format",
+      "mp3", // ← convert to mp3
+      "--audio-quality",
+      "0", // ← best quality
+    );
+  } else {
+    args.push("-f", decodeURIComponent(itag), "--merge-output-format", "mp4");
+  }
+
+  args.push(cleanUrl);
+
+  const proc = spawn(YTDLP_BIN, args);
+
+  proc.stdout.pipe(res);
+  proc.stderr.on("data", (d) => console.error("[yt-dlp]", d.toString().trim()));
+  proc.on("error", () => {
+    if (!res.headersSent) res.status(500).json({ message: "Spawn failed" });
+  });
+  proc.on("close", (code) => {
+    if (code !== 0 && !res.writableEnded) res.end();
+  });
+  res.on("close", () => proc.kill());
+}
 
 // ─── GET /api/videos/thumbnail ────────────────────────────────────────────────
 
