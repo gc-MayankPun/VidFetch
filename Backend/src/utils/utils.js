@@ -15,6 +15,14 @@ export const YTDLP_BIN = (() => {
 })();
 
 console.log(`[utils] YTDLP_BIN: ${YTDLP_BIN} (exists: ${existsSync(YTDLP_BIN)})`);
+try {
+  const head = execSync(`head -1 ${YTDLP_BIN}`).toString().trim();
+  console.log(`[utils] yt-dlp first line: ${head}`);
+} catch(e) {
+  console.log(`[utils] could not read yt-dlp: ${e.message}`);
+}
+
+
 
 // ── Cookies ───────────────────────────────────────────────────────────────────
 export const COOKIES_PATH = path.resolve(__dirname, "../../../cookies.txt");
