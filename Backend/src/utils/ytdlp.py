@@ -11,6 +11,9 @@ YTDLP_BIN = (
     "/usr/local/bin/yt-dlp" if os.path.exists("/usr/local/bin/yt-dlp") else "yt-dlp"
 )
 
+# Ensure node is findable by yt-dlp for nsig solving
+os.environ["PATH"] = f"/usr/local/bin:/root/.nix-profile/bin:{os.environ.get('PATH', '')}"
+
 # Ensure node is in PATH for yt-dlp n-challenge solving
 _NODE_BIN = "/root/.nix-profile/bin"
 if os.path.isdir(_NODE_BIN):
@@ -298,7 +301,7 @@ def cmd_resolve(url, itag, cookies_path=None):
         "ext": ext,
         "title": title,
     }))
-    
+
 # ─────────────────────────────────
 # MAIN
 # ─────────────────────────────────
