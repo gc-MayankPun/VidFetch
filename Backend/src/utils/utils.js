@@ -44,12 +44,6 @@ export function baseArgs(client = "web") {
     "--no-playlist",
     "--no-warnings",
     "--force-ipv4",
-    "--sleep-requests",
-    "2",
-    "--socket-timeout",
-    "30",
-    "--http-chunk-size",
-    "1048576",
     "--user-agent",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "--extractor-args",
@@ -98,7 +92,7 @@ export function runYtdlp(args, timeoutMs = 120000) {
 // ── Run with client rotation + retries ───────────────────────────────────────
 const CLIENTS = ["web", "web_safari", "android", "android_creator"];
 
-export async function runWithRetry(extraArgs, url, retries = 3) {
+export async function runWithRetry(extraArgs, url, retries = 1) {
   let lastError;
 
   for (let attempt = 0; attempt < retries; attempt++) {
