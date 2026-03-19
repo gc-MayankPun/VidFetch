@@ -2,26 +2,19 @@ import { spawn } from "child_process";
 import { existsSync } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-// import {
-//   isValidYouTubeUrl,
-//   runPython,
-//   TMP_DIR,
-//   COOKIES_PATH,
-// } from "../utils/utils.js";
-
-// Change import to add YTDLP_BIN:
 import {
   isValidYouTubeUrl,
   runPython,
   normalizeYouTubeUrl,
   TMP_DIR,
   COOKIES_PATH,
-  YTDLP_BIN, // ← add this
+  YTDLP_BIN,
 } from "../utils/utils.js";
 
-// Cookies args reused across all spawn calls
 const cookiesArgs = existsSync(COOKIES_PATH) ? ["--cookies", COOKIES_PATH] : [];
-
+const proxyArgs = process.env.PROXY_URL
+  ? ["--proxy", process.env.PROXY_URL]
+  : [];
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -81,10 +74,6 @@ async function downloadController(req, res) {
 
   const cleanUrl = normalizeYouTubeUrl(url);
 
-  const DOWNLOAD_BIN = existsSync("/usr/local/bin/yt-dlp")
-    ? "/usr/local/bin/yt-dlp"
-    : "yt-dlp";
-
   // ── MP3 ───────────────────────────────────────────────────────────────────
   if (type === "mp3") {
     try {
@@ -92,13 +81,13 @@ async function downloadController(req, res) {
       res.setHeader("Content-Type", "audio/webm");
       res.setHeader("Transfer-Encoding", "chunked");
 
-      // const child = spawn("yt-dlp", [
       const child = spawn("yt-dlp", [
         "-f",
         "bestaudio[ext=webm]/bestaudio",
         "-o",
         "-",
         ...cookiesArgs,
+        ...proxyArgs,
         "--user-agent",
         USER_AGENT,
         "--extractor-args",
@@ -111,24 +100,18 @@ async function downloadController(req, res) {
       ]);
 
       child.stdout.pipe(res);
-
-      child.stderr.on("data", (data) => {
-        console.error("yt-dlp stderr:", data.toString());
-      });
-
+      child.stderr.on("data", (data) =>
+        console.error("yt-dlp stderr:", data.toString()),
+      );
       child.on("error", (err) => {
         console.error("MP3 streaming error:", err);
-        if (!res.headersSent) {
+        if (!res.headersSent)
           res.status(500).json({ message: "MP3 streaming failed" });
-        } else {
-          res.end();
-        }
+        else res.end();
       });
-
       child.on("exit", (code) => {
-        if (code !== 0 && !res.headersSent) {
+        if (code !== 0 && !res.headersSent)
           res.status(500).json({ message: "MP3 conversion failed" });
-        }
       });
     } catch (err) {
       console.error("MP3 download error:", err.message);
@@ -147,7 +130,6 @@ async function downloadController(req, res) {
       res.setHeader("Content-Type", "video/mp4");
       res.setHeader("Transfer-Encoding", "chunked");
 
-      // const child = spawn("yt-dlp", [
       const child = spawn("yt-dlp", [
         "-f",
         "bestvideo+bestaudio/best",
@@ -156,6 +138,7 @@ async function downloadController(req, res) {
         "-o",
         "-",
         ...cookiesArgs,
+        ...proxyArgs,
         "--user-agent",
         USER_AGENT,
         "--extractor-args",
@@ -168,24 +151,18 @@ async function downloadController(req, res) {
       ]);
 
       child.stdout.pipe(res);
-
-      child.stderr.on("data", (data) => {
-        console.error("yt-dlp stderr:", data.toString());
-      });
-
+      child.stderr.on("data", (data) =>
+        console.error("yt-dlp stderr:", data.toString()),
+      );
       child.on("error", (err) => {
         console.error("MP4 streaming error:", err);
-        if (!res.headersSent) {
+        if (!res.headersSent)
           res.status(500).json({ message: "MP4 streaming failed" });
-        } else {
-          res.end();
-        }
+        else res.end();
       });
-
       child.on("exit", (code) => {
-        if (code !== 0 && !res.headersSent) {
+        if (code !== 0 && !res.headersSent)
           res.status(500).json({ message: "MP4 download failed" });
-        }
       });
     } catch (err) {
       console.error("MP4 download error:", err.message);

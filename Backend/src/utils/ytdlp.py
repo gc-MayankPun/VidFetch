@@ -45,6 +45,7 @@ def base_cmd(cookies_path=None, client="web"):
     cmd = [
         YTDLP_BIN,
         "--no-playlist",
+        "--no-warnings",
         "--force-ipv4",
         "--sleep-requests", "2",
         "--socket-timeout", "30",
@@ -52,6 +53,10 @@ def base_cmd(cookies_path=None, client="web"):
         "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "--extractor-args", f"youtube:player_client={client}",
     ]
+
+    proxy = os.environ.get("PROXY_URL", "")
+    if proxy:
+        cmd += ["--proxy", proxy]
 
     if cookies_path and os.path.exists(cookies_path):
         cmd += ["--cookies", cookies_path]
