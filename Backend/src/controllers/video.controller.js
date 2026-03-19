@@ -84,9 +84,7 @@ async function videoInfoController(req, res) {
       });
     }
 
-    res
-      .status(500)
-      .json({ message: "Failed to fetch video info", err: { err } });
+    res.status(500).json({ message: "Failed to fetch video info", err });
   }
 }
 
