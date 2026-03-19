@@ -203,7 +203,7 @@ async function downloadController(req, res) {
   res.setHeader("Transfer-Encoding", "chunked");
 
   const args = [
-    ...baseArgs("ios"),
+    ...baseArgs(),
     "-o",
     "-",
     "--socket-timeout",
@@ -216,7 +216,7 @@ async function downloadController(req, res) {
     "mp4",
     cleanUrl,
   ];
-
+  
   const proc = spawn(YTDLP_BIN, args);
   proc.stdout.pipe(res);
   proc.stderr.on("data", (d) => console.error("[yt-dlp]", d.toString().trim()));
