@@ -1,9 +1,18 @@
 import { existsSync } from "fs";
 import { spawn } from "child_process";
+// import {
+//   isValidYouTubeUrl,
+//   normalizeYouTubeUrl,
+//   runWithRetry,
+//   YTDLP_BIN,
+//   baseArgs,
+// } from "../utils/utils.js";
+
 import {
   isValidYouTubeUrl,
   normalizeYouTubeUrl,
   runWithRetry,
+  runYtdlp,
   YTDLP_BIN,
   baseArgs,
 } from "../utils/utils.js";
@@ -23,7 +32,14 @@ async function videoInfoController(req, res) {
   const cleanUrl = normalizeYouTubeUrl(url);
 
   try {
-    const raw = await runWithRetry(["--dump-json"], cleanUrl);
+    // const raw = await runWithRetry(["--dump-json"], cleanUrl);
+    const raw = await runYtdlp([
+      "--dump-json",
+      "--no-playlist",
+      "--socket-timeout", "30",
+      "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      cleanUrl
+    ]);
     const info = JSON.parse(raw);
     const formats = info.formats || [];
 
