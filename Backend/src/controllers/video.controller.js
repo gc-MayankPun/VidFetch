@@ -9,7 +9,9 @@ import {
   COOKIES_PATH,
 } from "../utils/utils.js";
 
+// Cookies args reused across all spawn calls
 const cookiesArgs = existsSync(COOKIES_PATH) ? ["--cookies", COOKIES_PATH] : [];
+
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 // ─── POST /api/videos/info ────────────────────────────────────────────────────
@@ -120,7 +122,8 @@ async function downloadController(req, res) {
       res.setHeader("Transfer-Encoding", "chunked");
 
       const child = spawn("yt-dlp", [
-        "-f", "best[ext=mp4]",  // single pre-merged format, no ffmpeg merge needed
+        "-f", "bestvideo+bestaudio/best",
+        "--merge-output-format", "mp4",
         "-o", "-",
         ...cookiesArgs,
         "--user-agent", USER_AGENT,
