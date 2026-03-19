@@ -6,7 +6,10 @@ import shutil
 import subprocess
 import time
 
-YTDLP_BIN = shutil.which("yt-dlp") or "yt-dlp"
+YTDLP_BIN = (
+    shutil.which("yt-dlp") or
+    "/usr/local/bin/yt-dlp" if os.path.exists("/usr/local/bin/yt-dlp") else "yt-dlp"
+)
 
 # Ensure node is in PATH for yt-dlp n-challenge solving
 _NODE_BIN = "/root/.nix-profile/bin"
