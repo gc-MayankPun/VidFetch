@@ -42,11 +42,12 @@ def base_cmd(cookies_path=None, client="web"):
         if os.path.isdir(p) and p not in os.environ.get("PATH", ""):
             os.environ["PATH"] = f"{p}:{os.environ['PATH']}"
 
-    node_bin = shutil.which("node") or ""
+    node_bin = shutil.which("node") or "/root/.nix-profile/bin/node"
+    
+    if node_bin and os.path.exists(node_bin):
+        os.environ["NODE"] = node_bin
 
     extractor_args = f"youtube:player_client={client}"
-    if node_bin:
-        extractor_args += f";js_interpreters=nodejs:{node_bin}"
 
     cmd = [
         YTDLP_BIN,
@@ -57,6 +58,7 @@ def base_cmd(cookies_path=None, client="web"):
         "--http-chunk-size", "1048576",
         "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "--extractor-args", extractor_args,
+        "--compat-options", "no-youtube-unavailable-videos",
     ]
 
     if cookies_path and os.path.exists(cookies_path):

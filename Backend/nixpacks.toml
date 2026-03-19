@@ -5,7 +5,9 @@ nixPkgs = ["python3", "nodejs_22", "ffmpeg", "curl"]
 cmds = [
   "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp",
   "chmod +x /usr/local/bin/yt-dlp",
-  "/usr/local/bin/yt-dlp --version"
+  "/usr/local/bin/yt-dlp --version",
+  "npm install -g yt-dlp-wrap || true",
+  "/usr/local/bin/yt-dlp --update-to nightly || true"
 ]
 
 [phases.install]
