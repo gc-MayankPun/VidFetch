@@ -120,7 +120,7 @@ async function downloadController(req, res) {
     const tmpFile = path.join(TMP_DIR, `${randomUUID()}.mp3`);
 
     const args = [
-      ...baseArgs(),
+      ...baseArgs("ios"),
       "-f", "bestaudio/best",  // ← CHANGED: was "bestaudio", now fallbacks to best combined if no audio-only stream
       "-x",
       "--audio-format", "mp3",
@@ -194,7 +194,7 @@ async function downloadController(req, res) {
   res.setHeader("Transfer-Encoding", "chunked");
 
   const args = [
-    ...baseArgs(),
+    ...baseArgs("ios"),
     "-o", "-",
     "--socket-timeout", "30",
     "--http-chunk-size", "1048576",
