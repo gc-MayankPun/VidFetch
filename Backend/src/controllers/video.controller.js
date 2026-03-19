@@ -2,11 +2,20 @@ import { spawn } from "child_process";
 import { existsSync } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+// import {
+//   isValidYouTubeUrl,
+//   runPython,
+//   TMP_DIR,
+//   COOKIES_PATH,
+// } from "../utils/utils.js";
+
+// Change import to add YTDLP_BIN:
 import {
   isValidYouTubeUrl,
   runPython,
   TMP_DIR,
   COOKIES_PATH,
+  YTDLP_BIN,        // ← add this
 } from "../utils/utils.js";
 
 // Cookies args reused across all spawn calls
@@ -75,7 +84,8 @@ async function downloadController(req, res) {
       res.setHeader("Content-Type", "audio/webm");
       res.setHeader("Transfer-Encoding", "chunked");
 
-      const child = spawn("yt-dlp", [
+      // const child = spawn("yt-dlp", [
+      const child = spawn(YTDLP_BIN,
         "-f", "bestaudio[ext=webm]/bestaudio",
         "-o", "-",
         ...cookiesArgs,
@@ -121,7 +131,8 @@ async function downloadController(req, res) {
       res.setHeader("Content-Type", "video/mp4");
       res.setHeader("Transfer-Encoding", "chunked");
 
-      const child = spawn("yt-dlp", [
+      // const child = spawn("yt-dlp", [
+      const child = spawn(YTDLP_BIN,
         "-f", "bestvideo+bestaudio/best",
         "--merge-output-format", "mp4",
         "-o", "-",

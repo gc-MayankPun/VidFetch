@@ -3,6 +3,10 @@ import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import path from "path";
 
+export const YTDLP_BIN = existsSync("/usr/local/bin/yt-dlp")
+  ? "/usr/local/bin/yt-dlp"
+  : "yt-dlp";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ── Cookies ───────────────────────────────────────────────────────────────────
