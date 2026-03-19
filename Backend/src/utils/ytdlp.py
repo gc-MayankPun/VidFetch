@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import time
 
-YTDLP_BIN = "yt-dlp"
+YTDLP_BIN = "/usr/local/bin/yt-dlp"
 
 # Ensure node is in PATH for yt-dlp n-challenge solving
 _NODE_BIN = "/root/.nix-profile/bin"
