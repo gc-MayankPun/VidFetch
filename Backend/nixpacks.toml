@@ -5,6 +5,7 @@ nixPkgs = ["python3", "nodejs_22", "ffmpeg", "curl"]
 cmds = [
   "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp",
   "chmod +x /usr/local/bin/yt-dlp",
+  "ln -sf /root/.nix-profile/bin/node /usr/local/bin/node",
   "/usr/local/bin/yt-dlp --version"
 ]
 
