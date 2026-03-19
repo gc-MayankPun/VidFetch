@@ -24,6 +24,8 @@ async function videoInfoController(req, res) {
       ...baseArgs(), // ← baseArgs() guards existsSync(COOKIES_PATH) for you
       "--dump-json",
       "--no-playlist",
+      "--skip-download", // ← add this
+      "--ignore-errors",
       "--socket-timeout",
       "30",
       cleanUrl,
