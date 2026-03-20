@@ -5,10 +5,10 @@ import path from "path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// ── Binary resolution ─────────────────────────────────────────────────────────
+// Binary resolution  
 export const YTDLP_BIN = (() => {
   const candidates = [
-    "/usr/local/bin/yt-dlp", // ← where your Dockerfile puts it, check FIRST
+    "/usr/local/bin/yt-dlp",  
     "/usr/bin/yt-dlp",
     "/app/yt-dlp",
   ];
@@ -30,18 +30,18 @@ try {
   console.log(`[utils] could not read yt-dlp: ${e.message}`);
 }
 
-// ── Cookies ───────────────────────────────────────────────────────────────────
+// Cookies  
 export const COOKIES_PATH = path.resolve(process.cwd(), "cookies.txt");
 if (process.env.YOUTUBE_COOKIES) {
   writeFileSync(COOKIES_PATH, process.env.YOUTUBE_COOKIES, "utf-8");
   console.log("[utils] cookies.txt written from env var");
 }
 
-// ── Tmp dir ───────────────────────────────────────────────────────────────────
+// Tmp dir
 export const TMP_DIR = path.resolve(__dirname, "../../../tmp");
 if (!existsSync(TMP_DIR)) mkdirSync(TMP_DIR, { recursive: true });
 
-// ── Base args builder ─────────────────────────────────────────────────────────
+// Base args builder
 export function baseArgs(client = "web") {
   const args = [
     "--no-playlist",
@@ -61,7 +61,7 @@ export function baseArgs(client = "web") {
   return args;
 }
 
-// ── Run yt-dlp and collect stdout ─────────────────────────────────────────────
+// Run yt-dlp and collect stdout
 const CLIENTS = ["web", "ios", "android", "mweb"];
 
 export function runYtdlp(args, timeoutMs = 60000) {
@@ -122,7 +122,7 @@ export async function runWithRetry(extraArgs, url, retries = 1) {
   throw new Error(lastError || "yt-dlp failed after retries");
 }
 
-// ── URL helpers ───────────────────────────────────────────────────────────────
+// URL helpers
 export function normalizeYouTubeUrl(url) {
   try {
     const u = new URL(url);
